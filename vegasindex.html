@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#3A1240">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Vegas Trip">
+<title>Vegas Girls Trip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Limelight&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one narrow column like a phone wallet — marquee header with bulb border, sticky tab bar, stacked sections. */
+:root{
+  --bg:#FBF5F2; --surface:#FFFFFF; --sunk:#F5ECEE; --ink:#2A1630; --muted:#7A6478; --line:#EADBE3;
+  --accent:#B8155A; --accent-ink:#FFFFFF; --accent-soft:#F9E1EB; --gold:#B8860B; --marquee:#3A1240; --marquee-ink:#FFF4DA;
+  --pos:#1D7A4E; --pos-soft:#E1F3E9; --neg:#B3261E; --neg-soft:#FBE4E1;
+  --c1:#B8155A; --c2:#6A3FB5; --c3:#1D7A8C; --c4:#C2621A; --c5:#2E7D32; --c6:#8E2C8A; --c7:#3949AB; --c8:#A1522F;
+  --display:"Limelight", "Didot", Georgia, serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --num:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#170D1C; --surface:#22152A; --sunk:#1C1123; --ink:#F7EAF1; --muted:#B9A2B6; --line:#3A2843;
+  --accent:#FF5C9A; --accent-ink:#2A0716; --accent-soft:#3D1A2E; --gold:#E9BD55; --marquee:#2B0F33; --marquee-ink:#FFF1CC;
+  --pos:#62D39C; --pos-soft:#153326; --neg:#FF8F85; --neg-soft:#3A1B1A;
+  --c1:#FF5C9A; --c2:#A98BF0; --c3:#4FC3D4; --c4:#F2A15B; --c5:#7BCF80; --c6:#E07ADB; --c7:#8C9EFF; --c8:#E39A78;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#170D1C; --surface:#22152A; --sunk:#1C1123; --ink:#F7EAF1; --muted:#B9A2B6; --line:#3A2843;
+  --accent:#FF5C9A; --accent-ink:#2A0716; --accent-soft:#3D1A2E; --gold:#E9BD55; --marquee:#2B0F33; --marquee-ink:#FFF1CC;
+  --pos:#62D39C; --pos-soft:#153326; --neg:#FF8F85; --neg-soft:#3A1B1A;
+  --c1:#FF5C9A; --c2:#A98BF0; --c3:#4FC3D4; --c4:#F2A15B; --c5:#7BCF80; --c6:#E07ADB; --c7:#8C9EFF; --c8:#E39A78;
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 64px}
+h1,h2,h3{text-wrap:balance;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums}
+
+/* Marquee header */
+.marquee{border-radius:22px;padding:11px;background:radial-gradient(circle,var(--gold) 2.4px,transparent 3.2px) 0 0/15px 15px,var(--marquee)}
+.marquee-in{border-radius:13px;background:var(--marquee);color:var(--marquee-ink);padding:20px 20px 18px;display:grid;gap:10px;border:1px solid color-mix(in srgb,var(--gold) 45%,transparent)}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--gold)}
+.marquee h1{font-family:var(--display);font-weight:400;font-size:clamp(30px,8vw,46px);line-height:1.05;letter-spacing:.01em}
+.meta{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;opacity:.92}
+.meta b{font-weight:600}
+.countdown{display:inline-flex;align-items:center;gap:8px;background:color-mix(in srgb,var(--gold) 22%,transparent);border:1px solid color-mix(in srgb,var(--gold) 55%,transparent);border-radius:999px;padding:4px 12px;font-size:13px;font-weight:600;width:max-content;max-width:100%}
+.syncnote{font-size:12px;color:var(--muted);margin:8px 4px 0}
+
+/* Tabs */
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);margin:14px calc(-1 * max(16px,env(safe-area-inset-left,0px))) 0;padding:8px max(16px,env(safe-area-inset-left,0px));display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line)}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;white-space:nowrap;cursor:pointer;color:var(--muted);text-decoration:none}
+.tab[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+/* Sections */
+main{display:grid;gap:22px;margin-top:18px}
+.sec{display:grid;gap:10px}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.sec-head h2{font-size:19px;font-weight:700}
+.sub{color:var(--muted);font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;font-weight:600;font-size:14px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn.danger{color:var(--neg);border-color:color-mix(in srgb,var(--neg) 40%,var(--line))}
+.btn.danger.armed{background:var(--neg);color:var(--surface);border-color:var(--neg)}
+.empty{border:1.5px dashed var(--line);border-radius:var(--r);padding:22px 18px;text-align:center;color:var(--muted);display:grid;gap:10px;justify-items:center}
+.empty b{color:var(--ink)}
+
+.kv{display:grid;grid-template-columns:minmax(110px,auto) 1fr;gap:6px 14px;font-size:14px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.kv a{color:var(--accent)}
+
+/* Tiles */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
+.tile .l{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.tile .v{font-family:var(--num);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:420px){.tile .v{font-size:16px}}
+
+/* Girls */
+.girls{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.girl{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:8px;cursor:pointer;text-align:left}
+.girl:hover{border-color:var(--accent)}
+.girl-top{display:flex;align-items:center;gap:10px;min-width:0}
+.girl-top div{min-width:0}
+.girl-name{font-weight:700;font-size:16px}
+.small{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.av{width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;color:var(--surface);background:var(--c1)}
+.av.xs{width:24px;height:24px;font-size:10px;border:2px solid var(--surface)}
+.stack{display:flex}.stack .av.xs+.av.xs{margin-left:-6px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;background:var(--sunk);border:1px solid var(--line);color:var(--ink);white-space:nowrap}
+.chip .dot{width:7px;height:7px;border-radius:50%}
+
+/* Lists */
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer;align-items:center}
+.row:first-child{border-top:0}
+.row:hover{background:var(--sunk)}
+.row-main{min-width:0;display:grid;gap:3px}
+.row-title{font-weight:600;overflow-wrap:anywhere}
+.row-amt{font-family:var(--num);font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.row-amt small{display:block;font-family:var(--body);font-weight:500;font-size:12px;color:var(--muted)}
+.dayhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 4px}
+.dayhead h3{font-size:15px;font-weight:700}
+.daynum{font-family:var(--display);font-size:22px;color:var(--accent);font-weight:400;margin-right:8px}
+.time{font-family:var(--num);font-size:13px;color:var(--accent);font-weight:600;min-width:62px}
+.plan{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer;align-items:start}
+.plan:first-child{border-top:0}
+.plan:hover{background:var(--sunk)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.filters select{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:14px}
+
+/* Settle */
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:460px}
+th,td{padding:10px 12px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+th{border-top:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+th:first-child,td:first-child{text-align:left}
+td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
+.pos{color:var(--pos)}.neg{color:var(--neg)}
+.pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700}
+.pill.pos{background:var(--pos-soft)}.pill.neg{background:var(--neg-soft)}.pill.even{background:var(--sunk);color:var(--muted)}
+.xfer{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
+.xfer:first-child{border-top:0}
+.xfer-who{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.arrow{color:var(--muted);font-size:13px}
+.xfer-amt{font-family:var(--num);font-weight:600;font-size:17px}
+.bars{display:grid;gap:8px}
+.bar{display:grid;grid-template-columns:110px 1fr 84px;gap:10px;align-items:center;font-size:14px}
+.bar-track{height:10px;border-radius:6px;background:var(--sunk);overflow:hidden}
+.bar-fill{height:100%;border-radius:6px}
+.bar .num{text-align:right}
+@media (max-width:420px){.bar{grid-template-columns:86px 1fr 74px}}
+.allset{background:var(--pos-soft);color:var(--pos);border-radius:var(--r);padding:14px 16px;font-weight:600}
+
+/* Modal */
+.overlay{position:fixed;inset:0;z-index:20;background:color-mix(in srgb,var(--ink) 45%,transparent);display:flex;align-items:flex-end;justify-content:center;padding:0}
+.sheet{background:var(--surface);color:var(--ink);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:20px 20px 0 0;padding:18px max(18px,env(safe-area-inset-left,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-right,0px));display:grid;gap:14px}
+@media (min-width:640px){.overlay{align-items:center;padding:20px}.sheet{border-radius:20px}}
+.sheet h2{font-size:20px}
+.fields{display:grid;gap:12px}
+.f{display:grid;gap:4px;min-width:0}
+.f label,.f .lbl{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.f input,.f select,.f textarea{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 11px;font-size:16px;width:100%;min-width:0}
+.f textarea{min-height:70px;resize:vertical}
+.f .hint{font-size:12px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:420px){.two{grid-template-columns:1fr}}
+.checks{display:grid;gap:6px}
+.check{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.check input[type=number]{width:110px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;font-size:15px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:max-content}
+.seg button{border:0;background:var(--bg);padding:7px 14px;font-weight:600;font-size:14px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.err{color:var(--neg);font-size:14px;font-weight:600}
+.foot{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.foot .right{display:flex;gap:8px;margin-left:auto}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;max-width:calc(100% - 32px)}
+.signin{max-width:420px;margin:22px auto 0;display:grid;gap:14px}
+.signin .panel{display:grid;gap:12px;padding:20px}
+.signin h2{font-size:20px}
+.signin input{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:11px 12px;font-size:16px;width:100%}
+.signin .btn{padding:11px 14px;font-size:15px}
+.userbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.linkbtn{border:0;background:none;color:var(--accent);font-weight:600;font-size:12px;cursor:pointer;padding:0}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(16px);opacity:.6}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="marquee"><div class="marquee-in" id="hero"></div></header>
+  <div class="userbar"><p class="syncnote" id="sync">Connecting…</p><button class="linkbtn" id="signout" hidden>Sign out</button></div>
+  <section class="signin" id="signin" hidden>
+    <form class="panel" id="signinform" novalidate>
+      <h2>Join the trip</h2>
+      <p class="sub" style="margin:0">Enter your email and we’ll send you a sign-in link. No password, no app to download.</p>
+      <div class="f"><label for="si_email">Your email</label><input type="email" id="si_email" autocomplete="email" inputmode="email" placeholder="you@example.com" required></div>
+      <button class="btn primary" type="submit" id="si_btn">Email me a sign-in link</button>
+      <div class="err" id="si_err" hidden></div>
+    </form>
+    <div class="panel" id="si_sent" hidden>
+      <h2>Check your email</h2>
+      <p style="margin:0">We sent a link to <b id="si_to"></b>. Open it on this phone or computer and you’re in. It can take a minute, so check spam too.</p>
+      <button class="btn" type="button" id="si_again">Use a different email</button>
+    </div>
+  </section>
+  <nav class="tabs" id="tabs" aria-label="Sections" hidden></nav>
+  <main id="main" hidden></main>
+</div>
+<div class="overlay" id="overlay" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<!-- Supabase settings: paste your project's URL and anon (public) key here. -->
+<script>
+window.TRIP_CONFIG={
+  SUPABASE_URL:"https://dpweuovbspmpfncrtzsl.supabase.co",
+  SUPABASE_ANON_KEY:"sb_publishable_IjHcPD0BUiv-FF4jXIYWEA_ZURJafH4",
+  TRIP_ID:"vegas-girls-trip"
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script>
+(function(){
+const COLS=['girls','expenses','plans','payments'];
+const S={trip:{},girls:[],expenses:[],plans:[],payments:[],loaded:false};
+const CATS=['Hotel','Food','Drinks','Shows & tickets','Clubs & cover','Ride share','Pool & spa','Shopping','Gambling','Flights','Tips','Other'];
+const PLAN_KINDS=['Show','Dinner','Brunch','Club','Pool party','Spa','Shopping','Tour','Drinks','Flight','Other'];
+const RIDE_SERVICES=['Uber','Lyft','Taxi','Hotel shuttle','Other'];
+const TABS=[['trip','Trip & girls'],['plans','Calendar'],['expenses','Expenses'],['rides','Rides'],['settle','Who owes who']];
+let tab='trip', backend=null, filterGirl='', readOnly=false;
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=c=>((c||0)<0?'-':'')+'$'+(Math.abs(c||0)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const toCents=v=>{const n=parseFloat(String(v).replace(/[$,\s]/g,''));return isFinite(n)?Math.round(n*100):NaN};
+const uid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)).replace(/[^a-zA-Z0-9-]/g,'');
+const pd=s=>{if(!s)return null;const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const todayIso=()=>iso(new Date());
+const dLong=s=>{const d=pd(s);return d?d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'No date'};
+const dShort=s=>{const d=pd(s);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):''};
+const t12=t=>{if(!t)return'';const[h,m]=t.split(':').map(Number);return ((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?' am':' pm')};
+const girl=id=>S.girls.find(g=>g.id===id);
+const gname=id=>girl(id)?.name||'Someone';
+const sortedGirls=()=>[...S.girls].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+const gidx=id=>Math.max(0,sortedGirls().findIndex(g=>g.id===id));
+const initials=n=>(n||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+const av=(id,cls='')=>`<span class="av ${cls}" style="background:var(--c${gidx(id)%8+1})" title="${esc(gname(id))}">${esc(initials(gname(id)))}</span>`;
+const catColor=c=>`var(--c${(CATS.indexOf(c)%8+8)%8+1})`;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2600)}
+
+/* ---------- money math ---------- */
+function shares(e){
+  const out={};
+  if(e.splitMode==='custom'){for(const k in (e.custom||{}))if(e.custom[k])out[k]=e.custom[k];return out}
+  const ids=sortedGirls().map(g=>g.id).filter(id=>(e.splitAmong||[]).includes(id));
+  if(!ids.length)return out;
+  const base=Math.floor(e.amountCents/ids.length);let rem=e.amountCents-base*ids.length;
+  ids.forEach(id=>{out[id]=base+(rem>0?1:0);if(rem>0)rem--});
+  return out;
+}
+function balances(){
+  const b={};sortedGirls().forEach(g=>b[g.id]={paid:0,share:0,sent:0,recv:0});
+  const ensure=id=>b[id]||(b[id]={paid:0,share:0,sent:0,recv:0});
+  S.expenses.forEach(e=>{ensure(e.paidBy).paid+=e.amountCents||0;const sh=shares(e);for(const k in sh)ensure(k).share+=sh[k]});
+  S.payments.forEach(p=>{ensure(p.from).sent+=p.amountCents||0;ensure(p.to).recv+=p.amountCents||0});
+  for(const k in b)b[k].net=b[k].paid-b[k].share+b[k].sent-b[k].recv;
+  return b;
+}
+function transfers(b){
+  const cred=[],debt=[];
+  for(const k in b){const n=b[k].net;if(n>0)cred.push({id:k,n});else if(n<0)debt.push({id:k,n:-n})}
+  cred.sort((a,c)=>c.n-a.n);debt.sort((a,c)=>c.n-a.n);
+  const out=[];let i=0,j=0;
+  while(i<debt.length&&j<cred.length){const amt=Math.min(debt[i].n,cred[j].n);if(amt>0)out.push({from:debt[i].id,to:cred[j].id,amt});debt[i].n-=amt;cred[j].n-=amt;if(!debt[i].n)i++;if(!cred[j].n)j++}
+  return out;
+}
+
+/* ---------- storage ---------- */
+function localBackend(){
+  const KEY='vegas-girls-trip-v1';
+  const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify({trip:S.trip,girls:S.girls,expenses:S.expenses,plans:S.plans,payments:S.payments}))}catch(e){}};
+  return{
+    shared:false,
+    start(){try{const d=JSON.parse(localStorage.getItem(KEY)||'null');if(d)Object.assign(S,d)}catch(e){}S.loaded=true;render()},
+    async save(col,id,obj){if(col==='trip'){S.trip=obj}else{const a=S[col],i=a.findIndex(x=>x.id===id);const r={...obj,id};i<0?a.push(r):a[i]=r}persist();render()},
+    async remove(col,id){S[col]=S[col].filter(x=>x.id!==id);persist();render()}
+  };
+}
+/* Supabase table: trip_items (trip_id, id, kind, data, updated_at). One row per girl/expense/plan/payment, plus one 'trip' row. */
+function supaBackend(sb){
+  const TRIP=window.TRIP_CONFIG.TRIP_ID;
+  const apply=row=>{
+    if(!row||row.trip_id!==TRIP)return;
+    if(row.kind==='trip'){S.trip={...(row.data||{})};return}
+    if(!COLS.includes(row.kind))return;
+    const itemId=row.id.slice(row.kind.length+1);const a=S[row.kind];const i=a.findIndex(x=>x.id===itemId);const r={...(row.data||{}),id:itemId};
+    i<0?a.push(r):a[i]=r;
+  };
+  const drop=row=>{if(!row||!row.id)return;const k=row.id.split(':')[0];if(COLS.includes(k)){const itemId=row.id.slice(k.length+1);S[k]=S[k].filter(x=>x.id!==itemId)}};
+  async function loadAll(){
+    const {data,error}=await sb.from('trip_items').select('*').eq('trip_id',TRIP);
+    if(error)throw error;
+    COLS.forEach(c=>S[c]=[]);S.trip={};(data||[]).forEach(apply);S.loaded=true;render();
+  }
+  return{
+    shared:true,
+    async start(){
+      try{await loadAll()}catch(e){S.loaded=true;render();toast('Couldn’t load the trip. Check your connection and refresh.');return}
+      sb.channel('trip-'+TRIP).on('postgres_changes',{event:'*',schema:'public',table:'trip_items'},p=>{
+        if(p.eventType==='DELETE')drop(p.old);else apply(p.new);render();
+      }).subscribe(st=>{live=st==='SUBSCRIBED';setSync()});
+      document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')loadAll().catch(()=>{})});
+    },
+    async save(col,id,obj){
+      const rowId=col==='trip'?'trip:main':col+':'+id;
+      const {error}=await sb.from('trip_items').upsert({trip_id:TRIP,id:rowId,kind:col,data:obj,updated_at:new Date().toISOString()});
+      if(error)throw error;
+      apply({trip_id:TRIP,id:rowId,kind:col,data:obj});render();
+    },
+    async remove(col,id){
+      const rowId=col+':'+id;
+      const {error}=await sb.from('trip_items').delete().eq('trip_id',TRIP).eq('id',rowId);
+      if(error)throw error;
+      drop({id:rowId});render();
+    }
+  };
+}
+let live=false;
+async function write(fn){
+  try{await fn();return null}
+  catch(e){
+    if(e&&(e.code==='42501'||/row-level security|permission/i.test(e.message||'')))return 'You’re signed out or don’t have access. Sign out and sign back in with your email.';
+    return 'That didn’t save. Check your connection and try again.';
+  }
+}
+function setSync(){
+  const el=$('#sync');
+  if(!backend){el.textContent='Connecting…';return}
+  el.textContent=!backend.shared?'Demo mode — saved on this device only until the database is connected.':live?'Live — everyone’s changes show up instantly.':'Shared trip — connecting to live updates…';
+}
+
+/* ---------- render ---------- */
+function renderHero(){
+  const t=S.trip;const s=pd(t.startDate),e=pd(t.endDate);
+  let cd='';
+  if(s){const today=pd(todayIso());const days=Math.round((s-today)/864e5);
+    if(days>0)cd=`${days} day${days===1?'':'s'} to go`;
+    else if(e&&today<=e){const n=Math.round((today-s)/864e5)+1,tot=Math.round((e-s)/864e5)+1;cd=`Day ${n} of ${tot}`}
+    else if(e)cd='Trip complete — time to settle up';
+    else if(days===0)cd='It’s today!';}
+  const dates=s?`${dShort(t.startDate)}${e?' – '+dShort(t.endDate):''}`:'Dates not set';
+  $('#hero').innerHTML=`
+    <div class="eyebrow">Las Vegas, Nevada</div>
+    <h1>${esc(t.name||'Vegas Girls Trip')}</h1>
+    <div class="meta"><span><b>${esc(dates)}</b></span>${t.hotelName?`<span>${esc(t.hotelName)}</span>`:''}<span>${S.girls.length} girl${S.girls.length===1?'':'s'}</span></div>
+    ${cd?`<span class="countdown">${esc(cd)}</span>`:''}`;
+}
+function renderTabs(){
+  $('#tabs').innerHTML=TABS.map(([k,l])=>`<a class="tab" href="#${k}" ${k===tab?'aria-current="page"':''}>${l}</a>`).join('');
+}
+function render(){
+  renderHero();renderTabs();setSync();
+  const m=$('#main');
+  if(!S.loaded){m.innerHTML=`<div class="empty"><b>Loading the trip…</b></div>`;return}
+  m.innerHTML={trip:vTrip,plans:vPlans,expenses:vExpenses,rides:vRides,settle:vSettle}[tab]();
+}
+
+function needGirls(){return `<div class="empty"><b>Add the girls first</b><span>Everyone who’s splitting costs needs to be on the list.</span><button class="btn primary" data-act="girl-new">Add a girl</button></div>`}
+
+function vTrip(){
+  const t=S.trip;const b=balances();
+  const hotel=t.hotelName||t.hotelAddress||t.confirmation?`
+    <dl class="kv panel">
+      ${t.hotelName?`<dt>Hotel</dt><dd><b>${esc(t.hotelName)}</b></dd>`:''}
+      ${t.hotelAddress?`<dt>Address</dt><dd>${esc(t.hotelAddress)} · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.hotelAddress)}" target="_blank" rel="noopener">Map</a></dd>`:''}
+      ${t.hotelPhone?`<dt>Phone</dt><dd class="num">${esc(t.hotelPhone)}</dd>`:''}
+      ${t.confirmation?`<dt>Confirmation #</dt><dd class="num">${esc(t.confirmation)}</dd>`:''}
+      ${t.bookedUnder?`<dt>Booked under</dt><dd>${esc(t.bookedUnder)}</dd>`:''}
+      ${t.checkIn||t.checkOut?`<dt>Check-in / out</dt><dd>${esc([t.checkIn&&dLong(t.checkIn)+(t.checkInTime?' '+t.checkInTime:''),t.checkOut&&dLong(t.checkOut)+(t.checkOutTime?' '+t.checkOutTime:'')].filter(Boolean).join(' → '))}</dd>`:''}
+      ${t.rooms?`<dt>Rooms</dt><dd>${esc(t.rooms)}</dd>`:''}
+      ${t.wifi?`<dt>Wi-Fi</dt><dd>${esc(t.wifi)}</dd>`:''}
+    </dl>`:`<div class="empty"><b>No hotel details yet</b><span>Add the hotel, confirmation number and check-in times so nobody has to dig through texts.</span><button class="btn primary" data-act="trip-edit">Add hotel details</button></div>`;
+  const girls=S.girls.length?`<div class="girls">${sortedGirls().map(g=>`
+    <button class="girl" data-act="girl-edit" data-id="${g.id}">
+      <div class="girl-top">${av(g.id)}<div><div class="girl-name">${esc(g.name)}</div><div class="small">${esc([g.phone,g.payHandle].filter(Boolean).join(' · ')||'Tap to add phone & Venmo')}</div></div></div>
+      ${(g.cards||'').trim()?`<div class="chips">${g.cards.split(',').map(c=>c.trim()).filter(Boolean).map(c=>`<span class="chip">${esc(c)}</span>`).join('')}</div>`:''}
+      <div class="small">Paid so far <span class="num">${fmt(b[g.id]?.paid)}</span></div>
+    </button>`).join('')}</div>`:`<div class="empty"><b>Who’s coming?</b><span>Add each girl with her phone, Venmo or Zelle, and the cards she might use.</span><button class="btn primary" data-act="girl-new">Add a girl</button></div>`;
+  return `
+  <section class="sec"><div class="sec-head"><h2>The girls</h2>${S.girls.length?'<button class="btn primary sm" data-act="girl-new">Add girl</button>':''}</div>${girls}</section>
+  <section class="sec"><div class="sec-head"><h2>Hotel & trip details</h2><button class="btn sm" data-act="trip-edit">Edit</button></div>${hotel}
+    ${t.notes?`<div class="panel"><div class="eyebrow" style="color:var(--muted)">Notes</div><div style="white-space:pre-wrap">${esc(t.notes)}</div></div>`:''}
+    ${t.emergency?`<div class="panel"><div class="eyebrow" style="color:var(--muted)">Emergency contacts</div><div style="white-space:pre-wrap">${esc(t.emergency)}</div></div>`:''}
+  </section>`;
+}
+
+function tripDays(){
+  const s=pd(S.trip.startDate),e=pd(S.trip.endDate);const set=new Set();
+  if(s&&e&&e>=s&&(e-s)/864e5<31){for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1))set.add(iso(d))}
+  S.plans.forEach(p=>p.date&&set.add(p.date));
+  S.expenses.filter(x=>x.ride&&x.date&&x.ride.time).forEach(x=>set.add(x.date));
+  return [...set].sort();
+}
+function vPlans(){
+  const days=tripDays();const undated=S.plans.filter(p=>!p.date);
+  const head=`<div class="sec-head"><div><h2>Calendar</h2><div class="sub">Shows, dinners, reservations and rides, day by day.</div></div><button class="btn primary sm" data-act="plan-new">Add plan</button></div>`;
+  if(!days.length&&!undated.length)return `<section class="sec">${head}<div class="empty"><b>Nothing planned yet</b><span>Add the show, the brunch reservation, the pool day. Set trip dates under Trip & girls to see every day laid out.</span><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn primary" data-act="plan-new">Add a plan</button><button class="btn" data-act="trip-edit">Set trip dates</button></div></div></section>`;
+  const item=p=>`<div class="plan" data-act="plan-edit" data-id="${p.id}">
+      <span class="time">${p.time?t12(p.time):'Any time'}</span>
+      <div class="row-main"><span class="row-title">${esc(p.title)}</span>
+        <span class="small">${esc([p.location,p.confirmation&&'Conf # '+p.confirmation,p.cost&&p.cost+' per person'].filter(Boolean).join(' · '))}</span>
+        ${p.notes?`<span class="small">${esc(p.notes)}</span>`:''}</div>
+      <div style="display:grid;gap:5px;justify-items:end"><span class="chip">${esc(p.kind||'Plan')}</span>${(p.going||[]).length?`<span class="stack">${(p.going||[]).filter(girl).map(id=>av(id,'xs')).join('')}</span>`:''}</div>
+    </div>`;
+  const ride=x=>`<div class="plan" data-act="exp-edit" data-id="${x.id}">
+      <span class="time">${t12(x.ride.time)}</span>
+      <div class="row-main"><span class="row-title">${esc(x.ride.service||'Ride')}: ${esc(x.ride.from||'?')} → ${esc(x.ride.to||'?')}</span><span class="small">Paid by ${esc(gname(x.paidBy))} · <span class="num">${fmt(x.amountCents)}</span></span></div>
+      <span class="chip">Ride</span></div>`;
+  const out=days.map(d=>{
+    const ps=S.plans.filter(p=>p.date===d);const rs=S.expenses.filter(x=>x.ride&&x.date===d&&x.ride.time);
+    const items=[...ps.map(p=>({t:p.time||'99',h:item(p)})),...rs.map(x=>({t:x.ride.time,h:ride(x)}))].sort((a,b)=>a.t.localeCompare(b.t));
+    const dd=pd(d);
+    return `<div class="sec"><div class="dayhead"><h3><span class="daynum">${dd.getDate()}</span>${dd.toLocaleDateString('en-US',{weekday:'long',month:'long'})}</h3><button class="btn sm" data-act="plan-new" data-date="${d}">Add</button></div>
+      ${items.length?`<div class="list">${items.map(i=>i.h).join('')}</div>`:`<div class="empty" style="padding:12px">Free day — nothing booked</div>`}</div>`;
+  }).join('');
+  return `<section class="sec">${head}</section>${out}${undated.length?`<section class="sec"><div class="dayhead"><h3>Ideas — no date yet</h3></div><div class="list">${undated.map(item).join('')}</div></section>`:''}`;
+}
+
+function expRow(e){
+  const n=Object.keys(shares(e)).length;
+  const split=e.splitMode==='custom'?'custom split':n===S.girls.length&&n>1?'split with everyone':n===1?'for '+gname(Object.keys(shares(e))[0]):`split ${n} ways`;
+  return `<div class="row" data-act="exp-edit" data-id="${e.id}">
+    <div class="row-main"><span class="row-title">${esc(e.title)}</span>
+      <span class="small"><span class="chip"><span class="dot" style="background:${catColor(e.category)}"></span>${esc(e.category)}</span> Paid by <b>${esc(gname(e.paidBy))}</b>${e.card?' · '+esc(e.card):''}</span></div>
+    <span class="row-amt">${fmt(e.amountCents)}<small>${esc(split)}</small></span></div>`;
+}
+function vExpenses(){
+  if(!S.girls.length)return `<section class="sec"><div class="sec-head"><h2>Expenses</h2></div>${needGirls()}</section>`;
+  const all=S.expenses;const total=all.reduce((s,e)=>s+(e.amountCents||0),0);
+  let list=all;if(filterGirl)list=all.filter(e=>e.paidBy===filterGirl||shares(e)[filterGirl]);
+  const byDate={};list.forEach(e=>(byDate[e.date||'']=byDate[e.date||'']||[]).push(e));
+  const dates=Object.keys(byDate).sort().reverse();
+  const myShare=filterGirl?list.reduce((s,e)=>s+(shares(e)[filterGirl]||0),0):0;
+  return `<section class="sec">
+    <div class="sec-head"><div><h2>Expenses</h2><div class="sub">Every charge, who paid, and which card.</div></div><button class="btn primary sm" data-act="exp-new">Add expense</button></div>
+    <div class="tiles"><div class="tile"><div class="l">Total spent</div><div class="v">${fmt(total)}</div></div>
+      <div class="tile"><div class="l">Per girl</div><div class="v">${fmt(Math.round(total/Math.max(1,S.girls.length)))}</div></div>
+      <div class="tile"><div class="l">Charges</div><div class="v">${all.length}</div></div></div>
+    <div class="filters"><label class="sub" for="fg">Show</label><select id="fg" data-act="filter"><option value="">Everyone’s expenses</option>${sortedGirls().map(g=>`<option value="${g.id}" ${g.id===filterGirl?'selected':''}>Involving ${esc(g.name)}</option>`).join('')}</select>
+      ${filterGirl?`<span class="sub">${esc(gname(filterGirl))}’s share: <b class="num">${fmt(myShare)}</b></span>`:''}</div>
+  </section>
+  ${list.length?dates.map(d=>`<section class="sec"><div class="dayhead"><h3>${d?dLong(d):'No date'}</h3><span class="sub num">${fmt(byDate[d].reduce((s,e)=>s+e.amountCents,0))}</span></div><div class="list">${byDate[d].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(expRow).join('')}</div></section>`).join(''):`<div class="empty"><b>No expenses yet</b><span>Log the hotel deposit, dinner, bottle service, anything someone pays for the group. Pick who paid, which card, and who it’s split between.</span><button class="btn primary" data-act="exp-new">Add the first expense</button></div>`}`;
+}
+
+function vRides(){
+  if(!S.girls.length)return `<section class="sec"><div class="sec-head"><h2>Rides</h2></div>${needGirls()}</section>`;
+  const rides=S.expenses.filter(e=>e.category==='Ride share').sort((a,b)=>((b.date||'')+(b.ride?.time||'')).localeCompare((a.date||'')+(a.ride?.time||'')));
+  const total=rides.reduce((s,e)=>s+e.amountCents,0);
+  const by={};rides.forEach(r=>{const k=r.ride?.service||'Other';by[k]=(by[k]||0)+r.amountCents});
+  return `<section class="sec">
+    <div class="sec-head"><div><h2>Ride share</h2><div class="sub">Uber, Lyft and taxis. Rides count toward Who owes who.</div></div><button class="btn primary sm" data-act="ride-new">Add ride</button></div>
+    <div class="tiles"><div class="tile"><div class="l">Rides</div><div class="v">${rides.length}</div></div><div class="tile"><div class="l">Total</div><div class="v">${fmt(total)}</div></div><div class="tile"><div class="l">Avg ride</div><div class="v">${fmt(rides.length?Math.round(total/rides.length):0)}</div></div></div>
+    ${Object.keys(by).length?`<div class="chips">${Object.entries(by).map(([k,v])=>`<span class="chip">${esc(k)} <span class="num">${fmt(v)}</span></span>`).join('')}</div>`:''}
+    ${rides.length?`<div class="list">${rides.map(r=>`<div class="row" data-act="exp-edit" data-id="${r.id}">
+      <div class="row-main"><span class="row-title">${esc(r.ride?.from||'?')} → ${esc(r.ride?.to||'?')}</span>
+      <span class="small">${esc([r.ride?.service,dLong(r.date)+(r.ride?.time?' '+t12(r.ride.time):''),'Paid by '+gname(r.paidBy),r.card].filter(Boolean).join(' · '))}</span></div>
+      <span class="row-amt">${fmt(r.amountCents)}<small>${Object.keys(shares(r)).length} riders</small></span></div>`).join('')}</div>`:`<div class="empty"><b>No rides logged</b><span>After each Uber or Lyft, add who paid and who was in the car.</span><button class="btn primary" data-act="ride-new">Add a ride</button></div>`}
+  </section>`;
+}
+
+function vSettle(){
+  if(!S.girls.length)return `<section class="sec"><div class="sec-head"><h2>Who owes who</h2></div>${needGirls()}</section>`;
+  const b=balances();const xs=transfers(b);
+  const rows=sortedGirls().map(g=>{const r=b[g.id];const n=r.net;
+    return `<tr><td><span style="display:inline-flex;align-items:center;gap:8px">${av(g.id,'xs')}<b>${esc(g.name)}</b></span></td><td class="n">${fmt(r.paid)}</td><td class="n">${fmt(r.share)}</td><td class="n">${fmt(r.sent-r.recv)}</td>
+      <td>${n>0?`<span class="pill pos num">gets ${fmt(n)}</span>`:n<0?`<span class="pill neg num">owes ${fmt(-n)}</span>`:'<span class="pill even">even</span>'}</td></tr>`}).join('');
+  const byCard={};S.expenses.forEach(e=>{const k=(e.card||'Card not noted').trim()+'|'+e.paidBy;byCard[k]=(byCard[k]||0)+e.amountCents});
+  const cardRows=Object.entries(byCard).sort((a,c)=>c[1]-a[1]);
+  const byCat={};S.expenses.forEach(e=>byCat[e.category]=(byCat[e.category]||0)+e.amountCents);
+  const cats=Object.entries(byCat).sort((a,c)=>c[1]-a[1]);const max=cats[0]?.[1]||1;
+  return `<section class="sec">
+    <div class="sec-head"><div><h2>Who owes who</h2><div class="sub">The fewest payments that make everyone even.</div></div><button class="btn sm" data-act="copy">Copy summary</button></div>
+    ${!S.expenses.length?`<div class="empty"><b>Nothing to settle yet</b><span>Once expenses are logged, this shows exactly who sends money to whom.</span></div>`:
+    xs.length?`<div class="list">${xs.map(x=>{const to=girl(x.to);return `<div class="xfer"><div class="xfer-who">${av(x.from,'xs')}<b>${esc(gname(x.from))}</b><span class="arrow">pays</span>${av(x.to,'xs')}<b>${esc(gname(x.to))}</b>${to?.payHandle?`<span class="small">${esc(to.payHandle)}</span>`:''}</div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="xfer-amt num">${fmt(x.amt)}</span><button class="btn sm" data-act="pay-new" data-from="${x.from}" data-to="${x.to}" data-amt="${x.amt}">Mark paid</button></div></div>`}).join('')}</div>`:
+    `<div class="allset">Everyone is square. Nobody owes anybody.</div>`}
+  </section>
+  <section class="sec"><div class="sec-head"><h2>Balances</h2></div>
+    <div class="table-wrap"><table><thead><tr><th>Girl</th><th>Paid</th><th>Her share</th><th>Settled</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="sub">Paid = what she put on her cards for the group. Her share = what she used. Settled = money she’s already sent back (minus what she’s received).</div>
+  </section>
+  <section class="sec"><div class="sec-head"><h2>Payments made</h2><button class="btn sm" data-act="pay-new">Record payment</button></div>
+    ${S.payments.length?`<div class="list">${[...S.payments].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(p=>`<div class="row" data-act="pay-edit" data-id="${p.id}"><div class="row-main"><span class="row-title">${esc(gname(p.from))} paid ${esc(gname(p.to))}</span><span class="small">${esc([p.method,p.date&&dLong(p.date)].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(p.amountCents)}</span></div>`).join('')}</div>`:'<div class="sub">When someone pays another girl back, tap Mark paid so balances stay right.</div>'}
+  </section>
+  ${cardRows.length?`<section class="sec"><div class="sec-head"><h2>By credit card</h2></div><div class="list">${cardRows.map(([k,v])=>{const[c,id]=k.split('|');return `<div class="row" style="cursor:default"><div class="row-main"><span class="row-title">${esc(c)}</span><span class="small">${esc(gname(id))}</span></div><span class="row-amt">${fmt(v)}</span></div>`}).join('')}</div></section>`:''}
+  ${cats.length?`<section class="sec"><div class="sec-head"><h2>Where the money went</h2></div><div class="panel bars">${cats.map(([c,v])=>`<div class="bar"><span>${esc(c)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(2,v/max*100)}%;background:${catColor(c)}"></div></div><span class="num">${fmt(v)}</span></div>`).join('')}</div></section>`:''}`;
+}
+
+/* ---------- modal ---------- */
+let modalCtx=null;
+function openModal(title,body,{onSave,onDelete,saveLabel='Save'}){
+  const o=$('#overlay');
+  o.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><h2>${esc(title)}</h2><form class="fields" id="mform" novalidate>${body}<div class="err" id="merr" hidden></div>
+    <div class="foot">${onDelete?'<button type="button" class="btn danger" id="mdel">Delete</button>':''}<div class="right"><button type="button" class="btn" id="mcancel">Cancel</button><button type="submit" class="btn primary">${esc(saveLabel)}</button></div></div></form></div>`;
+  o.hidden=false;modalCtx={onSave,onDelete};
+  const f=o.querySelector('input,select,textarea');if(f)setTimeout(()=>f.focus(),30);
+}
+function closeModal(){$('#overlay').hidden=true;$('#overlay').innerHTML='';modalCtx=null}
+function merr(msg){const e=$('#merr');e.textContent=msg;e.hidden=!msg}
+const val=id=>{const el=document.getElementById(id);return el?el.value.trim():''};
+const opts=(arr,sel)=>arr.map(a=>{const[v,l]=Array.isArray(a)?a:[a,a];return `<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`}).join('');
+const girlOpts=sel=>opts(sortedGirls().map(g=>[g.id,g.name]),sel);
+
+function tripForm(){
+  const t=S.trip;
+  openModal('Trip & hotel details',`
+    <div class="f"><label for="t_name">Trip name</label><input id="t_name" value="${esc(t.name||'Vegas Girls Trip')}"></div>
+    <div class="two"><div class="f"><label for="t_s">First day</label><input type="date" id="t_s" value="${esc(t.startDate)}"></div><div class="f"><label for="t_e">Last day</label><input type="date" id="t_e" value="${esc(t.endDate)}"></div></div>
+    <div class="f"><label for="t_h">Hotel</label><input id="t_h" value="${esc(t.hotelName)}" placeholder="e.g. Bellagio"></div>
+    <div class="f"><label for="t_a">Hotel address</label><input id="t_a" value="${esc(t.hotelAddress)}"></div>
+    <div class="two"><div class="f"><label for="t_p">Hotel phone</label><input id="t_p" inputmode="tel" value="${esc(t.hotelPhone)}"></div><div class="f"><label for="t_c">Confirmation #</label><input id="t_c" value="${esc(t.confirmation)}"></div></div>
+    <div class="f"><label for="t_bu">Booked under</label><input id="t_bu" value="${esc(t.bookedUnder)}" placeholder="Whose name is on the reservation"></div>
+    <div class="two"><div class="f"><label for="t_ci">Check-in</label><input type="date" id="t_ci" value="${esc(t.checkIn)}"></div><div class="f"><label for="t_cit">Check-in time</label><input id="t_cit" value="${esc(t.checkInTime||'3 pm')}"></div></div>
+    <div class="two"><div class="f"><label for="t_co">Check-out</label><input type="date" id="t_co" value="${esc(t.checkOut)}"></div><div class="f"><label for="t_cot">Check-out time</label><input id="t_cot" value="${esc(t.checkOutTime||'11 am')}"></div></div>
+    <div class="f"><label for="t_r">Rooms & who’s in them</label><input id="t_r" value="${esc(t.rooms)}" placeholder="e.g. Rm 2214: Pennie & Jess"></div>
+    <div class="f"><label for="t_w">Wi-Fi</label><input id="t_w" value="${esc(t.wifi)}"></div>
+    <div class="f"><label for="t_em">Emergency contacts</label><textarea id="t_em">${esc(t.emergency)}</textarea></div>
+    <div class="f"><label for="t_n">Notes</label><textarea id="t_n" placeholder="Dress code for Saturday, pool cabana info, flights…">${esc(t.notes)}</textarea></div>`,
+  {onSave:async()=>{
+    if(val('t_s')&&val('t_e')&&val('t_e')<val('t_s'))return 'The last day comes before the first day.';
+    const o={name:val('t_name'),startDate:val('t_s'),endDate:val('t_e'),hotelName:val('t_h'),hotelAddress:val('t_a'),hotelPhone:val('t_p'),confirmation:val('t_c'),bookedUnder:val('t_bu'),checkIn:val('t_ci'),checkInTime:val('t_cit'),checkOut:val('t_co'),checkOutTime:val('t_cot'),rooms:val('t_r'),wifi:val('t_w'),emergency:val('t_em'),notes:val('t_n')};
+    return write(()=>backend.save('trip','main',o));
+  }});
+}
+
+function girlForm(id){
+  const g=id?girl(id):{};
+  const used=id&&(S.expenses.some(e=>e.paidBy===id||shares(e)[id])||S.payments.some(p=>p.from===id||p.to===id));
+  openModal(id?'Edit '+(g.name||''):'Add a girl',`
+    <div class="f"><label for="g_n">Name</label><input id="g_n" value="${esc(g.name)}" autocomplete="off"></div>
+    <div class="two"><div class="f"><label for="g_p">Phone</label><input id="g_p" inputmode="tel" value="${esc(g.phone)}"></div><div class="f"><label for="g_v">Venmo / Zelle / Cash App</label><input id="g_v" value="${esc(g.payHandle)}" placeholder="@venmo-name"></div></div>
+    <div class="f"><label for="g_c">Cards she might use</label><input id="g_c" value="${esc(g.cards)}" placeholder="Chase Sapphire 4417, Amex Gold"><span class="hint">Separate with commas. Use a nickname or the last 4 digits only — never the full card number.</span></div>`,
+  {onSave:async()=>{
+    const name=val('g_n');if(!name)return 'Add her name.';
+    if(/\d{12,}/.test(val('g_c').replace(/[\s-]/g,'')))return 'That looks like a full card number. Use only the last 4 digits.';
+    const o={name,phone:val('g_p'),payHandle:val('g_v'),cards:val('g_c'),createdAt:g.createdAt||Date.now()};
+    return write(()=>backend.save('girls',id||uid(),o));
+  },onDelete:id?async()=>used?`${g.name} has expenses or payments. Remove those first so the math stays right.`:write(()=>backend.remove('girls',id)):null});
+}
+
+function cardList(gid){const g=girl(gid);return (g?.cards||'').split(',').map(s=>s.trim()).filter(Boolean)}
+function expForm(id,preset={}){
+  if(!S.girls.length){girlForm();return}
+  const e=id?S.expenses.find(x=>x.id===id):{category:'Food',date:todayIso(),splitMode:'equal',splitAmong:S.girls.map(g=>g.id),...preset};
+  const isRide=()=>val('e_cat')==='Ride share';
+  const custom=e.custom||{};
+  openModal(id?'Edit expense':preset.category==='Ride share'?'Add a ride':'Add expense',`
+    <div class="two"><div class="f"><label for="e_t">What for?</label><input id="e_t" value="${esc(e.title)}" placeholder="${preset.category==='Ride share'?'Uber to the Strip':'Dinner at Nobu'}"></div>
+      <div class="f"><label for="e_a">Amount (with tip & tax)</label><input id="e_a" inputmode="decimal" value="${e.amountCents?(e.amountCents/100).toFixed(2):''}" placeholder="0.00"></div></div>
+    <div class="two"><div class="f"><label for="e_cat">Category</label><select id="e_cat">${opts(CATS,e.category)}</select></div><div class="f"><label for="e_d">Date</label><input type="date" id="e_d" value="${esc(e.date)}"></div></div>
+    <div id="ridebox" class="fields" ${e.category==='Ride share'?'':'hidden'}>
+      <div class="two"><div class="f"><label for="r_s">Service</label><select id="r_s">${opts(RIDE_SERVICES,e.ride?.service||'Uber')}</select></div><div class="f"><label for="r_t">Pickup time</label><input type="time" id="r_t" value="${esc(e.ride?.time)}"></div></div>
+      <div class="two"><div class="f"><label for="r_f">From</label><input id="r_f" value="${esc(e.ride?.from)}" placeholder="Harry Reid Airport"></div><div class="f"><label for="r_to">To</label><input id="r_to" value="${esc(e.ride?.to)}" placeholder="Hotel"></div></div>
+    </div>
+    <div class="two"><div class="f"><label for="e_pb">Who paid?</label><select id="e_pb">${girlOpts(e.paidBy||sortedGirls()[0].id)}</select></div>
+      <div class="f"><label for="e_card">Card used</label><input id="e_card" list="cardlist" value="${esc(e.card)}" placeholder="Card nickname or last 4"><datalist id="cardlist"></datalist></div></div>
+    <div class="f"><span class="lbl">Split between</span>
+      <div class="seg" role="group"><button type="button" data-split="equal" aria-pressed="${e.splitMode!=='custom'}">Equally</button><button type="button" data-split="custom" aria-pressed="${e.splitMode==='custom'}">Custom amounts</button></div>
+      <input type="hidden" id="e_sm" value="${e.splitMode==='custom'?'custom':'equal'}">
+      <div class="checks" id="splitbox">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="sp_${g.id}" ${e.splitMode==='custom'?(custom[g.id]?'checked':''):(e.splitAmong||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><input type="number" step="0.01" min="0" inputmode="decimal" id="cu_${g.id}" value="${custom[g.id]?(custom[g.id]/100).toFixed(2):''}" ${e.splitMode==='custom'?'':'hidden'} aria-label="${esc(g.name)} amount"></label>`).join('')}</div>
+      <span class="hint" id="splithint"></span></div>
+    <div class="f"><label for="e_n">Notes</label><input id="e_n" value="${esc(e.notes)}" placeholder="Optional"></div>`,
+  {onSave:async()=>{
+    const title=val('e_t'),amt=toCents(val('e_a'));
+    if(!title)return 'Say what the expense was for.';
+    if(!(amt>0))return 'Enter the amount, like 84.50.';
+    if(/\d{12,}/.test(val('e_card').replace(/[\s-]/g,'')))return 'That looks like a full card number. Use a nickname or last 4 only.';
+    const mode=val('e_sm');const o={title,amountCents:amt,category:val('e_cat'),date:val('e_d'),paidBy:val('e_pb'),card:val('e_card'),notes:val('e_n'),splitMode:mode,createdAt:e.createdAt||Date.now()};
+    if(mode==='custom'){const c={};let sum=0;sortedGirls().forEach(g=>{const v=toCents(val('cu_'+g.id)||'0');if(document.getElementById('sp_'+g.id).checked&&v>0){c[g.id]=v;sum+=v}});
+      if(!sum)return 'Enter how much each girl owes.';
+      if(sum!==amt)return `Custom amounts add up to ${fmt(sum)} but the expense is ${fmt(amt)}.`;
+      o.custom=c;o.splitAmong=Object.keys(c);}
+    else{o.splitAmong=sortedGirls().filter(g=>document.getElementById('sp_'+g.id).checked).map(g=>g.id);if(!o.splitAmong.length)return 'Pick at least one girl to split with.';}
+    if(o.category==='Ride share')o.ride={service:val('r_s'),time:val('r_t'),from:val('r_f'),to:val('r_to')};
+    return write(()=>backend.save('expenses',id||uid(),o));
+  },onDelete:id?async()=>write(()=>backend.remove('expenses',id)):null});
+  const syncCards=()=>{$('#cardlist').innerHTML=cardList(val('e_pb')).map(c=>`<option value="${esc(c)}">`).join('');if(!id&&!val('e_card')){const c=cardList(val('e_pb'));if(c.length===1)$('#e_card').value=c[0]}};
+  const hint=()=>{const amt=toCents(val('e_a'))||0;
+    if(val('e_sm')==='custom'){let sum=0;sortedGirls().forEach(g=>{if(document.getElementById('sp_'+g.id).checked)sum+=toCents(val('cu_'+g.id)||'0')||0});const left=amt-sum;$('#splithint').textContent=left===0?'Adds up.':left>0?`${fmt(left)} left to assign`:`${fmt(-left)} too much`}
+    else{const n=sortedGirls().filter(g=>document.getElementById('sp_'+g.id).checked).length;$('#splithint').textContent=n&&amt?`${fmt(Math.floor(amt/n))} each, ${n} way${n===1?'':'s'}`:''}};
+  syncCards();hint();
+  $('#e_pb').addEventListener('change',()=>{$('#e_card').value='';syncCards()});
+  $('#e_cat').addEventListener('change',()=>$('#ridebox').hidden=!isRide());
+  $('#mform').addEventListener('input',hint);
+  $('#mform').querySelectorAll('[data-split]').forEach(b=>b.addEventListener('click',()=>{const m=b.dataset.split;$('#e_sm').value=m;$('#mform').querySelectorAll('[data-split]').forEach(x=>x.setAttribute('aria-pressed',x===b));sortedGirls().forEach(g=>document.getElementById('cu_'+g.id).hidden=m!=='custom');hint()}));
+}
+
+function planForm(id,date){
+  const p=id?S.plans.find(x=>x.id===id):{kind:'Dinner',date:date||S.trip.startDate||'',going:S.girls.map(g=>g.id)};
+  openModal(id?'Edit plan':'Add a plan',`
+    <div class="f"><label for="p_t">What’s the plan?</label><input id="p_t" value="${esc(p.title)}" placeholder="Brunch at Mon Ami Gabi"></div>
+    <div class="two"><div class="f"><label for="p_k">Type</label><select id="p_k">${opts(PLAN_KINDS,p.kind)}</select></div><div class="f"><label for="p_l">Where</label><input id="p_l" value="${esc(p.location)}"></div></div>
+    <div class="two"><div class="f"><label for="p_d">Date</label><input type="date" id="p_d" value="${esc(p.date)}"><span class="hint">Leave blank for “someday” ideas.</span></div><div class="f"><label for="p_tm">Time</label><input type="time" id="p_tm" value="${esc(p.time)}"></div></div>
+    <div class="two"><div class="f"><label for="p_c">Confirmation #</label><input id="p_c" value="${esc(p.confirmation)}"></div><div class="f"><label for="p_cost">Cost per person</label><input id="p_cost" value="${esc(p.cost)}" placeholder="$85"></div></div>
+    ${S.girls.length?`<div class="f"><span class="lbl">Who’s going</span><div class="checks">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="pg_${g.id}" ${(p.going||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><span></span></label>`).join('')}</div></div>`:''}
+    <div class="f"><label for="p_n">Notes</label><input id="p_n" value="${esc(p.notes)}" placeholder="Dress code, who booked it…"></div>`,
+  {onSave:async()=>{
+    const title=val('p_t');if(!title)return 'Give the plan a name.';
+    const o={title,kind:val('p_k'),location:val('p_l'),date:val('p_d'),time:val('p_tm'),confirmation:val('p_c'),cost:val('p_cost'),notes:val('p_n'),going:sortedGirls().filter(g=>document.getElementById('pg_'+g.id)?.checked).map(g=>g.id),createdAt:p.createdAt||Date.now()};
+    return write(()=>backend.save('plans',id||uid(),o));
+  },onDelete:id?async()=>write(()=>backend.remove('plans',id)):null});
+}
+
+function payForm(id,pre={}){
+  const p=id?S.payments.find(x=>x.id===id):{from:pre.from||sortedGirls()[0]?.id,to:pre.to||sortedGirls()[1]?.id,amountCents:pre.amt||0,date:todayIso(),method:'Venmo'};
+  openModal(id?'Edit payment':'Record a payment',`
+    <div class="two"><div class="f"><label for="y_f">Who paid</label><select id="y_f">${girlOpts(p.from)}</select></div><div class="f"><label for="y_t">Paid to</label><select id="y_t">${girlOpts(p.to)}</select></div></div>
+    <div class="two"><div class="f"><label for="y_a">Amount</label><input id="y_a" inputmode="decimal" value="${p.amountCents?(p.amountCents/100).toFixed(2):''}"></div><div class="f"><label for="y_m">How</label><select id="y_m">${opts(['Venmo','Zelle','Cash App','Apple Cash','PayPal','Cash','Other'],p.method)}</select></div></div>
+    <div class="f"><label for="y_d">Date</label><input type="date" id="y_d" value="${esc(p.date)}"></div>`,
+  {saveLabel:id?'Save':'Mark as paid',onSave:async()=>{
+    const amt=toCents(val('y_a'));if(!(amt>0))return 'Enter the amount paid.';
+    if(val('y_f')===val('y_t'))return 'Pick two different girls.';
+    const o={from:val('y_f'),to:val('y_t'),amountCents:amt,method:val('y_m'),date:val('y_d'),createdAt:p.createdAt||Date.now()};
+    return write(()=>backend.save('payments',id||uid(),o));
+  },onDelete:id?async()=>write(()=>backend.remove('payments',id)):null});
+}
+
+function summaryText(){
+  const b=balances();const xs=transfers(b);const total=S.expenses.reduce((s,e)=>s+e.amountCents,0);
+  const lines=[`${S.trip.name||'Vegas Girls Trip'} — settle up`,`Total spent: ${fmt(total)}`,''];
+  if(xs.length){lines.push('Payments to make:');xs.forEach(x=>{const h=girl(x.to)?.payHandle;lines.push(`• ${gname(x.from)} pays ${gname(x.to)} ${fmt(x.amt)}${h?' ('+h+')':''}`)})}else lines.push('Everyone is even!');
+  lines.push('','Each girl’s share:');sortedGirls().forEach(g=>lines.push(`• ${g.name}: spent ${fmt(b[g.id].share)}, paid ${fmt(b[g.id].paid)}`));
+  return lines.join('\n');
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',async ev=>{
+  const t=ev.target.closest('[data-act]');
+  if(ev.target.id==='overlay'){closeModal();return}
+  if(ev.target.id==='mcancel'){closeModal();return}
+  if(ev.target.id==='mdel'){const b=ev.target;if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Tap again to delete';return}
+    const err=await modalCtx.onDelete();if(err)merr(err);else{closeModal();toast('Deleted')}return}
+  if(!t||t.tagName==='SELECT')return;
+  if(readOnly&&!['copy','filter'].includes(t.dataset.act)){toast('This trip is view only for you.');return}
+  const a=t.dataset.act,id=t.dataset.id;
+  if(a==='trip-edit')tripForm();
+  else if(a==='girl-new')girlForm();
+  else if(a==='girl-edit')girlForm(id);
+  else if(a==='exp-new')expForm();
+  else if(a==='ride-new')expForm(null,{category:'Ride share',title:'Uber'});
+  else if(a==='exp-edit')expForm(id);
+  else if(a==='plan-new')planForm(null,t.dataset.date);
+  else if(a==='plan-edit')planForm(id);
+  else if(a==='pay-new')payForm(null,{from:t.dataset.from,to:t.dataset.to,amt:+t.dataset.amt||0});
+  else if(a==='pay-edit')payForm(id);
+  else if(a==='copy'){const txt=summaryText();try{await navigator.clipboard.writeText(txt);toast('Summary copied — paste it in the group chat')}catch(e){openModal('Settle-up summary',`<div class="f"><textarea id="sumtxt" style="min-height:220px">${esc(txt)}</textarea><span class="hint">Select all and copy.</span></div>`,{onSave:async()=>null,saveLabel:'Done'});setTimeout(()=>$('#sumtxt').select(),50)}}
+});
+document.addEventListener('change',ev=>{if(ev.target.id==='fg'){filterGirl=ev.target.value;render()}});
+document.addEventListener('submit',async ev=>{
+  if(ev.target.id!=='mform')return;ev.preventDefault();
+  const btn=ev.target.querySelector('[type=submit]');btn.disabled=true;
+  const err=await modalCtx.onSave();btn.disabled=false;
+  if(err)merr(err);else{closeModal();toast('Saved')}
+});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&!$('#overlay').hidden)closeModal()});
+function route(){const h=location.hash.slice(1);tab=TABS.some(t=>t[0]===h)?h:'trip';render();}
+window.addEventListener('hashchange',()=>{route();window.scrollTo(0,0)});
+
+/* ---------- boot ---------- */
+function showApp(on){$('#signin').hidden=on;$('#tabs').hidden=!on;$('#main').hidden=!on}
+function showSignin(){
+  showApp(false);renderHero();$('#sync').textContent='Sign in to see the trip.';$('#signout').hidden=true;
+  $('#signinform').hidden=false;$('#si_sent').hidden=true;
+}
+let started=false;
+function startApp(sb,email){
+  showApp(true);$('#signout').hidden=!sb;
+  if(email)$('#signout').textContent='Sign out ('+email+')';
+  if(started)return;started=true;
+  backend=sb?supaBackend(sb):localBackend();
+  route();backend.start();setSync();
+}
+(async()=>{
+  renderHero();
+  const C=window.TRIP_CONFIG||{};
+  const configured=C.SUPABASE_URL&&!/PASTE_/.test(C.SUPABASE_URL)&&C.SUPABASE_ANON_KEY&&!/PASTE_/.test(C.SUPABASE_ANON_KEY);
+  if(!configured||!window.supabase){startApp(null);return}
+  const sb=window.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  $('#signinform').addEventListener('submit',async ev=>{
+    ev.preventDefault();const email=$('#si_email').value.trim();const err=$('#si_err');err.hidden=true;
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Enter a full email address, like jess@gmail.com.';err.hidden=false;return}
+    const b=$('#si_btn');b.disabled=true;b.textContent='Sending…';
+    const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
+    b.disabled=false;b.textContent='Email me a sign-in link';
+    if(error){err.textContent=/rate/i.test(error.message)?'Too many links sent. Wait a minute and try again.':'Couldn’t send the link. Check the email and try again.';err.hidden=false;return}
+    $('#si_to').textContent=email;$('#signinform').hidden=true;$('#si_sent').hidden=false;
+  });
+  $('#si_again').addEventListener('click',()=>{$('#signinform').hidden=false;$('#si_sent').hidden=true});
+  $('#signout').addEventListener('click',async()=>{await sb.auth.signOut();location.hash='';location.reload()});
+  sb.auth.onAuthStateChange((evt,session)=>{if(session)startApp(sb,session.user.email)});
+  const {data:{session}}=await sb.auth.getSession();
+  if(session)startApp(sb,session.user.email);else showSignin();
+})();
+})();
+</script>
+</body>
+</html>
