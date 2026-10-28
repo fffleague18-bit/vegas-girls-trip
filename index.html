@@ -842,7 +842,7 @@ function startApp(sb,email){
     const b=$('#si_btn');b.disabled=true;b.textContent='Sending…';
     const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
     b.disabled=false;b.textContent='Email me a sign-in code';
-    if(error){err.textContent=/rate/i.test(error.message)?'Too many links sent. Wait a minute and try again.':'Couldn’t send the link. Check the email and try again.';err.hidden=false;return}
+    if(error){err.textContent=/rate/i.test(error.message)?'Sign-in emails are limited to a few per hour for the whole group. Please try again in about an hour.':'Couldn’t send the link. Check the email and try again.';err.hidden=false;return}
     $('#si_to').textContent=email;$('#signinform').hidden=true;$('#si_sent').hidden=false;$('#si_code').value='';$('#si_verr').hidden=true;
   });
   async function signInWith(raw){
