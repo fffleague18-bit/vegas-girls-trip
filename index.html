@@ -188,6 +188,9 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .signin input{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:11px 12px;font-size:16px;width:100%}
 .signin .btn{padding:11px 14px;font-size:15px}
 .steps{margin:0;padding-left:20px;display:grid;gap:4px}
+.lblrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.quick{display:inline-flex;gap:14px}
+.quick .linkbtn{font-size:13px}
 .userbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .linkbtn{border:0;background:none;color:var(--accent);font-weight:600;font-size:12px;cursor:pointer;padding:0}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(16px);opacity:.6}}}
@@ -457,6 +460,7 @@ function vPlans(){
       <span class="time">${p.time?t12(p.time):'Any time'}</span>
       <div class="row-main"><span class="row-title">${esc(p.title)}</span>
         <span class="small">${esc([p.location,p.confirmation&&'Conf # '+p.confirmation,p.cost&&p.cost+' per person'].filter(Boolean).join(' · '))}</span>
+        ${(p.going||[]).filter(girl).length?`<span class="small"><b>Going:</b> ${esc((p.going||[]).filter(girl).map(gname).sort((a,b)=>a.localeCompare(b)).join(', '))}</span>`:'<span class="small">Nobody marked as going yet</span>'}
         ${p.notes?`<span class="small">${esc(p.notes)}</span>`:''}
         ${chargeList('plan',p.id)}</div>
       <div style="display:grid;gap:6px;justify-items:end"><span class="chip">${esc(p.kind||'Plan')}</span>${(p.going||[]).filter(girl).length?`<span class="stack">${(p.going||[]).filter(girl).map(id=>av(id,'xs')).join('')}</span>`:''}
@@ -582,7 +586,7 @@ function tripForm(){
 }
 
 function guestChecks(prefix,sel){
-  return `<div class="checks">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="${prefix}${g.id}" ${(sel||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><span></span></label>`).join('')}</div>`;
+  return `<span class="quick"><button type="button" class="linkbtn" data-checkall="${prefix}" data-on="1">All</button><button type="button" class="linkbtn" data-checkall="${prefix}" data-on="">None</button></span><div class="checks">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="${prefix}${g.id}" ${(sel||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><span></span></label>`).join('')}</div>`;
 }
 const checkedIds=prefix=>sortedGirls().filter(g=>document.getElementById(prefix+g.id)?.checked).map(g=>g.id);
 
@@ -592,7 +596,7 @@ function hotelForm(id){
   const linked=id?S.expenses.filter(e=>e.linkType==='hotel'&&e.linkId===id).length:0;
   openModal(id?'Edit '+(h.name||'hotel'):'Add a hotel',`
     <div class="f"><label for="h_n">Hotel</label><input id="h_n" value="${esc(h.name)}" placeholder="e.g. Bellagio"></div>
-    ${S.girls.length?`<div class="f"><span class="lbl">Who’s staying here</span>${guestChecks('hg_',h.guests)}<span class="hint">Room charges linked to this hotel split only between the girls checked here. Change it any time and the math updates.</span></div>`:''}
+    ${S.girls.length?`<div class="f"><div class="lblrow"><span class="lbl">Who’s staying here</span>${guestChecks('hg_',h.guests).split('<div class="checks">')[0]}</div><div class="checks">${guestChecks('hg_',h.guests).split('<div class="checks">')[1]}<span class="hint">Room charges linked to this hotel split only between the girls checked here. Change it any time and the math updates.</span></div>`:''}
     <div class="f"><label for="h_a">Address</label><input id="h_a" value="${esc(h.address)}"></div>
     <div class="two"><div class="f"><label for="h_p">Phone</label><input id="h_p" inputmode="tel" value="${esc(h.phone)}"></div><div class="f"><label for="h_c">Confirmation #</label><input id="h_c" value="${esc(h.confirmation)}"></div></div>
     <div class="f"><label for="h_bu">Booked under</label><input id="h_bu" value="${esc(h.bookedUnder)}" placeholder="Whose name is on the reservation"></div>
@@ -681,8 +685,8 @@ function expForm(id,preset={}){
     </div>
     <div class="two"><div class="f"><label for="e_pb">Who paid?</label><select id="e_pb">${girlOpts(e.paidBy||sortedGirls()[0].id)}</select></div>
       <div class="f"><label for="e_card">Card used</label><input id="e_card" list="cardlist" value="${esc(e.card)}" maxlength="40" placeholder="Amex 1005"><datalist id="cardlist"></datalist><span class="hint">Card name and last 4 digits only. New cards are saved to her list.</span></div></div>
-    <div class="f"><span class="lbl">Split between</span>
-      <div class="seg" role="group"><button type="button" data-split="linked" id="seg_linked">Everyone in it</button><button type="button" data-split="equal">Pick girls</button><button type="button" data-split="custom">Custom amounts</button></div>
+    <div class="f"><div class="lblrow"><span class="lbl">Who’s included?</span><span class="quick"><button type="button" class="linkbtn" id="sp_all">All</button><button type="button" class="linkbtn" id="sp_none">None</button></span></div>
+      <div class="seg" role="group"><button type="button" data-split="linked" id="seg_linked">Everyone in it</button><button type="button" data-split="equal">Choose girls</button><button type="button" data-split="custom">Custom amounts</button></div>
       <input type="hidden" id="e_sm" value="${mode0}">
       <div class="checks" id="splitbox">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="sp_${g.id}" ${e.splitMode==='custom'?(custom[g.id]?'checked':''):(e.splitAmong||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><input type="number" step="0.01" min="0" inputmode="decimal" id="cu_${g.id}" value="${custom[g.id]?(custom[g.id]/100).toFixed(2):''}" hidden aria-label="${esc(g.name)} amount"></label>`).join('')}</div>
       <span class="hint" id="splithint"></span></div>
@@ -735,6 +739,8 @@ function expForm(id,preset={}){
   });
   $('#mform').addEventListener('input',hint);
   $('#mform').querySelectorAll('[data-split]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.split)));
+  const setAll=on=>{if(val('e_sm')==='linked')setMode('equal');sortedGirls().forEach(g=>{document.getElementById('sp_'+g.id).checked=on});hint()};
+  $('#sp_all').addEventListener('click',()=>setAll(true));$('#sp_none').addEventListener('click',()=>setAll(false));
 }
 
 function planForm(id,date){
@@ -745,7 +751,7 @@ function planForm(id,date){
     <div class="f"><label for="p_t">What’s the plan?</label><input id="p_t" value="${esc(p.title)}" placeholder="Brunch at Mon Ami Gabi"></div>
     <div class="two"><div class="f"><label for="p_k">Type</label><select id="p_k">${opts(PLAN_KINDS,p.kind)}</select></div><div class="f"><label for="p_l">Where</label><input id="p_l" value="${esc(p.location)}"></div></div>
     <div class="two"><div class="f"><label for="p_d">Date</label><input type="date" id="p_d" value="${esc(p.date)}"><span class="hint">Leave blank for “someday” ideas.</span></div><div class="f"><label for="p_tm">Time</label><input type="time" id="p_tm" value="${esc(p.time)}"></div></div>
-    ${S.girls.length?`<div class="f"><span class="lbl">Who’s going</span>${guestChecks('pg_',p.going)}<span class="hint">Costs for this activity split only between the girls checked here.</span></div>`:''}
+    ${S.girls.length?`<div class="f"><div class="lblrow"><span class="lbl">Who’s going</span>${guestChecks('pg_',p.going).split('<div class="checks">')[0]}</div><div class="checks">${guestChecks('pg_',p.going).split('<div class="checks">')[1]}<span class="hint">Costs for this activity split only between the girls checked here.</span></div>`:''}
     <div class="two"><div class="f"><label for="p_c">Confirmation #</label><input id="p_c" value="${esc(p.confirmation)}"></div><div class="f"><label for="p_cost">Cost per person</label><input id="p_cost" value="${esc(p.cost)}" placeholder="$85"></div></div>
     <div class="f"><label for="p_n">Notes</label><input id="p_n" value="${esc(p.notes)}" placeholder="Dress code, who booked it…"></div>`,
   {onSave:async()=>{
@@ -803,6 +809,7 @@ document.addEventListener('click',async ev=>{
   else if(a==='pay-edit')payForm(id);
   else if(a==='copy'){const txt=summaryText();try{await navigator.clipboard.writeText(txt);toast('Summary copied — paste it in the group chat')}catch(e){openModal('Settle-up summary',`<div class="f"><textarea id="sumtxt" style="min-height:220px">${esc(txt)}</textarea><span class="hint">Select all and copy.</span></div>`,{onSave:async()=>null,saveLabel:'Done'});setTimeout(()=>$('#sumtxt').select(),50)}}
 });
+document.addEventListener('click',ev=>{const b=ev.target.closest('[data-checkall]');if(!b)return;const pre=b.dataset.checkall;document.querySelectorAll(`input[type=checkbox][id^="${pre}"]`).forEach(cb=>{cb.checked=!!b.dataset.on})});
 document.addEventListener('change',ev=>{if(ev.target.id==='fg'){filterGirl=ev.target.value;render()}});
 document.addEventListener('submit',async ev=>{
   if(ev.target.id!=='mform')return;ev.preventDefault();
