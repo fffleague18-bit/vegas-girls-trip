@@ -673,7 +673,7 @@ function expForm(id,preset={}){
       <div class="two"><div class="f"><label for="r_f">From</label><input id="r_f" value="${esc(e.ride?.from)}" placeholder="Harry Reid Airport"></div><div class="f"><label for="r_to">To</label><input id="r_to" value="${esc(e.ride?.to)}" placeholder="Hotel"></div></div>
     </div>
     <div class="two"><div class="f"><label for="e_pb">Who paid?</label><select id="e_pb">${girlOpts(e.paidBy||sortedGirls()[0].id)}</select></div>
-      <div class="f"><label for="e_card">Card used</label><input id="e_card" list="cardlist" value="${esc(e.card)}" placeholder="Card nickname or last 4"><datalist id="cardlist"></datalist></div></div>
+      <div class="f"><label for="e_card">Card used</label><input id="e_card" list="cardlist" value="${esc(e.card)}" placeholder="Card nickname or last 4"><datalist id="cardlist"></datalist><span class="hint">Type a new one anytime. It’s saved to her cards.</span></div></div>
     <div class="f"><span class="lbl">Split between</span>
       <div class="seg" role="group"><button type="button" data-split="linked" id="seg_linked">Everyone in it</button><button type="button" data-split="equal">Pick girls</button><button type="button" data-split="custom">Custom amounts</button></div>
       <input type="hidden" id="e_sm" value="${mode0}">
@@ -695,7 +695,10 @@ function expForm(id,preset={}){
     else if(mode==='linked'){const m=(curMembers()||[]).filter(girl);if(!m.length)return `Nobody is marked as ${link.startsWith('hotel')?'staying at':'going to'} ${curName()} yet. Edit it to add who’s in, or tap Pick girls.`;o.splitAmong=m;}
     else{o.splitAmong=checkedIds('sp_');if(!o.splitAmong.length)return 'Pick at least one girl to split with.';}
     if(o.category==='Ride share')o.ride={service:val('r_s'),time:val('r_t'),from:val('r_f'),to:val('r_to')};
-    return write(()=>backend.save('expenses',id||uid(),o));
+    const err=await write(()=>backend.save('expenses',id||uid(),o));
+    if(!err&&o.card){const g=girl(o.paidBy);const have=cardList(o.paidBy).map(c=>c.toLowerCase());
+      if(g&&!have.includes(o.card.toLowerCase())){const ng={...g,cards:[...cardList(o.paidBy),o.card].join(', ')};delete ng.id;write(()=>backend.save('girls',g.id,ng))}}
+    return err;
   },onDelete:id?async()=>write(()=>backend.remove('expenses',id)):null});
   function curMembers(){const v=val('e_for');if(!v)return null;const[t,i]=v.split(':');return t==='hotel'?(hotel(i)?.guests||[]):(plan(i)?.going||[])}
   function curName(){const v=val('e_for');if(!v)return '';const[t,i]=v.split(':');return t==='hotel'?(hotel(i)?.name||''):(plan(i)?.title||'')}
