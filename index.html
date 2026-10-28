@@ -145,6 +145,13 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .bar-fill{height:100%;border-radius:6px}
 .bar .num{text-align:right}
 @media (max-width:420px){.bar{grid-template-columns:86px 1fr 74px}}
+.editlink{display:block;font-family:var(--body);font-size:12px;font-weight:700;color:var(--accent);margin-top:2px}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.charges{display:grid;gap:4px;margin-top:4px}
+.charge{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--sunk);border-radius:10px;padding:7px 10px;cursor:pointer;font-size:14px}
+.charge:hover{border-color:var(--accent)}
+.charge .editlink{margin:0}
+.charge-t{min-width:0;overflow-wrap:anywhere}
 .hotelcard{display:grid;gap:12px}
 .who{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .allset{background:var(--pos-soft);color:var(--pos);border-radius:var(--r);padding:14px 16px;font-weight:600}
@@ -384,6 +391,11 @@ function render(){
 
 function needGirls(){return `<div class="empty"><b>Add the girls first</b><span>Everyone who’s splitting costs needs to be on the list.</span><button class="btn primary" data-act="girl-new">Add a girl</button></div>`}
 
+function chargeList(type,id){
+  const xs=S.expenses.filter(e=>e.linkType===type&&e.linkId===id).sort((a,c)=>(a.date||'').localeCompare(c.date||'')||(a.createdAt||0)-(c.createdAt||0));
+  if(!xs.length)return '';
+  return `<div class="charges">${xs.map(e=>`<button type="button" class="charge" data-act="exp-edit" data-id="${e.id}"><span class="charge-t">${esc(e.title)} <span class="small">· paid by ${esc(gname(e.paidBy))}</span></span><span class="num">${fmt(e.amountCents)}</span><span class="editlink">Edit</span></button>`).join('')}</div>`;
+}
 function linkedTotal(type,id){return S.expenses.filter(e=>e.linkType===type&&e.linkId===id).reduce((s,e)=>s+(e.amountCents||0),0)}
 function whoList(ids){const g=(ids||[]).filter(girl);return g.length?`<span class="stack">${g.map(id=>av(id,'xs')).join('')}</span><span class="small">${esc(g.map(gname).join(', '))}</span>`:'<span class="small">Nobody added yet</span>'}
 function vTrip(){
@@ -403,6 +415,7 @@ function vTrip(){
         <dt>Staying here</dt><dd class="who">${whoList(h.guests)}</dd>
         <dt>Hotel charges</dt><dd><span class="num">${fmt(tot)}</span>${tot&&n?` <span class="small">· about <span class="num">${fmt(Math.round(tot/n))}</span> each</span>`:''}</dd>
       </dl>
+      ${chargeList('hotel',h.id)}
       <div><button class="btn primary sm" data-act="hotel-charge" data-id="${h.id}">Add a charge for this hotel</button></div>
     </div>`}).join(''):`<div class="empty"><b>No hotels yet</b><span>Add each hotel and check who’s staying there. Room charges get split only between those girls.</span><button class="btn primary" data-act="hotel-new">Add a hotel</button></div>`;
   const girls=S.girls.length?`<div class="girls">${sortedGirls().map(g=>{
@@ -439,9 +452,10 @@ function vPlans(){
       <span class="time">${p.time?t12(p.time):'Any time'}</span>
       <div class="row-main"><span class="row-title">${esc(p.title)}</span>
         <span class="small">${esc([p.location,p.confirmation&&'Conf # '+p.confirmation,p.cost&&p.cost+' per person'].filter(Boolean).join(' · '))}</span>
-        ${p.notes?`<span class="small">${esc(p.notes)}</span>`:''}</div>
+        ${p.notes?`<span class="small">${esc(p.notes)}</span>`:''}
+        ${chargeList('plan',p.id)}</div>
       <div style="display:grid;gap:6px;justify-items:end"><span class="chip">${esc(p.kind||'Plan')}</span>${(p.going||[]).filter(girl).length?`<span class="stack">${(p.going||[]).filter(girl).map(id=>av(id,'xs')).join('')}</span>`:''}
-        ${linkedTotal('plan',p.id)?`<span class="small num">${fmt(linkedTotal('plan',p.id))}</span>`:''}<button class="btn sm" data-act="plan-charge" data-id="${p.id}">Add cost</button></div>
+        <div class="btnrow"><button class="btn sm" data-act="plan-edit" data-id="${p.id}">Edit</button><button class="btn sm" data-act="plan-charge" data-id="${p.id}">Add cost</button></div></div>
     </div>`;
   const stay=(h,kind)=>`<div class="plan" data-act="hotel-edit" data-id="${h.id}">
       <span class="time">${esc(kind==='in'?(h.checkInTime||'Check-in'):(h.checkOutTime||'Check-out'))}</span>
@@ -469,7 +483,7 @@ function expRow(e){
   return `<div class="row" data-act="exp-edit" data-id="${e.id}">
     <div class="row-main"><span class="row-title">${esc(e.title)}</span>
       <span class="small"><span class="chip"><span class="dot" style="background:${catColor(e.category)}"></span>${esc(e.category)}</span> Paid by <b>${esc(gname(e.paidBy))}</b>${e.card?' · '+esc(e.card):''}</span></div>
-    <span class="row-amt">${fmt(e.amountCents)}<small>${esc(split)}</small></span></div>`;
+    <span class="row-amt">${fmt(e.amountCents)}<small>${esc(split)}</small><span class="editlink">Edit</span></span></div>`;
 }
 function vExpenses(){
   if(!S.girls.length)return `<section class="sec"><div class="sec-head"><h2>Expenses</h2></div>${needGirls()}</section>`;
@@ -501,7 +515,7 @@ function vRides(){
     ${rides.length?`<div class="list">${rides.map(r=>`<div class="row" data-act="exp-edit" data-id="${r.id}">
       <div class="row-main"><span class="row-title">${esc(r.ride?.from||'?')} → ${esc(r.ride?.to||'?')}</span>
       <span class="small">${esc([r.ride?.service,dLong(r.date)+(r.ride?.time?' '+t12(r.ride.time):''),'Paid by '+gname(r.paidBy),r.card].filter(Boolean).join(' · '))}</span></div>
-      <span class="row-amt">${fmt(r.amountCents)}<small>${Object.keys(shares(r)).length} riders</small></span></div>`).join('')}</div>`:`<div class="empty"><b>No rides logged</b><span>After each Uber or Lyft, add who paid and who was in the car.</span><button class="btn primary" data-act="ride-new">Add a ride</button></div>`}
+      <span class="row-amt">${fmt(r.amountCents)}<small>${Object.keys(shares(r)).length} riders</small><span class="editlink">Edit</span></span></div>`).join('')}</div>`:`<div class="empty"><b>No rides logged</b><span>After each Uber or Lyft, add who paid and who was in the car.</span><button class="btn primary" data-act="ride-new">Add a ride</button></div>`}
   </section>`;
 }
 
@@ -527,7 +541,7 @@ function vSettle(){
     <div class="sub">Paid = what she put on her cards for the group. Her share = what she used. Settled = money she’s already sent back (minus what she’s received).</div>
   </section>
   <section class="sec"><div class="sec-head"><h2>Payments made</h2><button class="btn sm" data-act="pay-new">Record payment</button></div>
-    ${S.payments.length?`<div class="list">${[...S.payments].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(p=>`<div class="row" data-act="pay-edit" data-id="${p.id}"><div class="row-main"><span class="row-title">${esc(gname(p.from))} paid ${esc(gname(p.to))}</span><span class="small">${esc([p.method,p.date&&dLong(p.date)].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(p.amountCents)}</span></div>`).join('')}</div>`:'<div class="sub">When someone pays another girl back, tap Mark paid so balances stay right.</div>'}
+    ${S.payments.length?`<div class="list">${[...S.payments].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(p=>`<div class="row" data-act="pay-edit" data-id="${p.id}"><div class="row-main"><span class="row-title">${esc(gname(p.from))} paid ${esc(gname(p.to))}</span><span class="small">${esc([p.method,p.date&&dLong(p.date)].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(p.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div>`:'<div class="sub">When someone pays another girl back, tap Mark paid so balances stay right.</div>'}
   </section>
   ${cardRows.length?`<section class="sec"><div class="sec-head"><h2>By credit card</h2></div><div class="list">${cardRows.map(([k,v])=>{const[c,id]=k.split('|');return `<div class="row" style="cursor:default"><div class="row-main"><span class="row-title">${esc(c)}</span><span class="small">${esc(gname(id))}</span></div><span class="row-amt">${fmt(v)}</span></div>`}).join('')}</div></section>`:''}
   ${cats.length?`<section class="sec"><div class="sec-head"><h2>Where the money went</h2></div><div class="panel bars">${cats.map(([c,v])=>`<div class="bar"><span>${esc(c)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(2,v/max*100)}%;background:${catColor(c)}"></div></div><span class="num">${fmt(v)}</span></div>`).join('')}</div></section>`:''}`;
