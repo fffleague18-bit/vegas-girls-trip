@@ -145,6 +145,8 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .bar-fill{height:100%;border-radius:6px}
 .bar .num{text-align:right}
 @media (max-width:420px){.bar{grid-template-columns:86px 1fr 74px}}
+.hotelcard{display:grid;gap:12px}
+.who{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .allset{background:var(--pos-soft);color:var(--pos);border-radius:var(--r);padding:14px 16px;font-weight:600}
 
 /* Modal */
@@ -163,7 +165,7 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .checks{display:grid;gap:6px}
 .check{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
 .check input[type=number]{width:110px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;font-size:15px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:max-content}
+.seg{display:inline-flex;flex-wrap:wrap;max-width:100%;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:max-content}
 .seg button{border:0;background:var(--bg);padding:7px 14px;font-weight:600;font-size:14px;cursor:pointer;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 .err{color:var(--neg);font-size:14px;font-weight:600}
@@ -215,8 +217,13 @@ window.TRIP_CONFIG={
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
 <script>
 (function(){
-const COLS=['girls','expenses','plans','payments'];
-const S={trip:{},girls:[],expenses:[],plans:[],payments:[],loaded:false};
+const COLS=['girls','expenses','plans','payments','hotels'];
+const S={trip:{},girls:[],expenses:[],plans:[],payments:[],hotels:[],loaded:false};
+let ME_EMAIL='';
+const meId=()=>{if(!ME_EMAIL)return null;const g=S.girls.find(g=>(g.email||'').toLowerCase()===ME_EMAIL);return g?g.id:null};
+const hotel=id=>S.hotels.find(h=>h.id===id);
+const plan=id=>S.plans.find(p=>p.id===id);
+const PLAN_CAT={Show:'Shows & tickets',Dinner:'Food',Brunch:'Food',Club:'Clubs & cover','Pool party':'Pool & spa',Spa:'Pool & spa',Shopping:'Shopping',Drinks:'Drinks',Flight:'Flights',Tour:'Shows & tickets'};
 const CATS=['Hotel','Food','Drinks','Shows & tickets','Clubs & cover','Ride share','Pool & spa','Shopping','Gambling','Flights','Tips','Other'];
 const PLAN_KINDS=['Show','Dinner','Brunch','Club','Pool party','Spa','Shopping','Tour','Drinks','Flight','Other'];
 const RIDE_SERVICES=['Uber','Lyft','Taxi','Hotel shuttle','Other'];
@@ -245,10 +252,23 @@ const catColor=c=>`var(--c${(CATS.indexOf(c)%8+8)%8+1})`;
 function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2600)}
 
 /* ---------- money math ---------- */
+/* Members of the hotel or activity an expense is linked to (live), or null if not linked / link deleted. */
+function members(e){
+  if(e.linkType==='hotel'){const h=hotel(e.linkId);return h?(h.guests||[]):null}
+  if(e.linkType==='plan'){const p=plan(e.linkId);return p?(p.going||[]):null}
+  return null;
+}
+function linkName(e){
+  if(e.linkType==='hotel')return hotel(e.linkId)?.name||'';
+  if(e.linkType==='plan')return plan(e.linkId)?.title||'';
+  return '';
+}
 function shares(e){
   const out={};
   if(e.splitMode==='custom'){for(const k in (e.custom||{}))if(e.custom[k])out[k]=e.custom[k];return out}
-  const ids=sortedGirls().map(g=>g.id).filter(id=>(e.splitAmong||[]).includes(id));
+  let among=e.splitAmong||[];
+  if(e.splitMode==='linked'){const m=members(e);if(m&&m.filter(girl).length)among=m}
+  const ids=sortedGirls().map(g=>g.id).filter(id=>among.includes(id));
   if(!ids.length)return out;
   const base=Math.floor(e.amountCents/ids.length);let rem=e.amountCents-base*ids.length;
   ids.forEach(id=>{out[id]=base+(rem>0?1:0);if(rem>0)rem--});
@@ -274,10 +294,10 @@ function transfers(b){
 /* ---------- storage ---------- */
 function localBackend(){
   const KEY='vegas-girls-trip-v1';
-  const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify({trip:S.trip,girls:S.girls,expenses:S.expenses,plans:S.plans,payments:S.payments}))}catch(e){}};
+  const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify({trip:S.trip,girls:S.girls,expenses:S.expenses,plans:S.plans,payments:S.payments,hotels:S.hotels}))}catch(e){}};
   return{
     shared:false,
-    start(){try{const d=JSON.parse(localStorage.getItem(KEY)||'null');if(d)Object.assign(S,d)}catch(e){}S.loaded=true;render()},
+    start(){try{const d=JSON.parse(localStorage.getItem(KEY)||'null');if(d)Object.assign(S,d)}catch(e){}S.hotels=S.hotels||[];S.loaded=true;render()},
     async save(col,id,obj){if(col==='trip'){S.trip=obj}else{const a=S[col],i=a.findIndex(x=>x.id===id);const r={...obj,id};i<0?a.push(r):a[i]=r}persist();render()},
     async remove(col,id){S[col]=S[col].filter(x=>x.id!==id);persist();render()}
   };
@@ -300,8 +320,9 @@ function supaBackend(sb){
   }
   return{
     shared:true,
-    async start(){
+    async start(onReady){
       try{await loadAll()}catch(e){S.loaded=true;render();toast('Couldn’t load the trip. Check your connection and refresh.');return}
+      if(onReady)onReady();
       sb.channel('trip-'+TRIP).on('postgres_changes',{event:'*',schema:'public',table:'trip_items'},p=>{
         if(p.eventType==='DELETE')drop(p.old);else apply(p.new);render();
       }).subscribe(st=>{live=st==='SUBSCRIBED';setSync()});
@@ -348,7 +369,7 @@ function renderHero(){
   $('#hero').innerHTML=`
     <div class="eyebrow">Las Vegas, Nevada</div>
     <h1>${esc(t.name||'Vegas Girls Trip')}</h1>
-    <div class="meta"><span><b>${esc(dates)}</b></span>${t.hotelName?`<span>${esc(t.hotelName)}</span>`:''}<span>${S.girls.length} girl${S.girls.length===1?'':'s'}</span></div>
+    <div class="meta"><span><b>${esc(dates)}</b></span>${S.hotels.length?`<span>${esc(S.hotels.map(h=>h.name).join(' · '))}</span>`:''}<span>${S.girls.length} girl${S.girls.length===1?'':'s'}</span></div>
     ${cd?`<span class="countdown">${esc(cd)}</span>`:''}`;
 }
 function renderTabs(){
@@ -363,28 +384,40 @@ function render(){
 
 function needGirls(){return `<div class="empty"><b>Add the girls first</b><span>Everyone who’s splitting costs needs to be on the list.</span><button class="btn primary" data-act="girl-new">Add a girl</button></div>`}
 
+function linkedTotal(type,id){return S.expenses.filter(e=>e.linkType===type&&e.linkId===id).reduce((s,e)=>s+(e.amountCents||0),0)}
+function whoList(ids){const g=(ids||[]).filter(girl);return g.length?`<span class="stack">${g.map(id=>av(id,'xs')).join('')}</span><span class="small">${esc(g.map(gname).join(', '))}</span>`:'<span class="small">Nobody added yet</span>'}
 function vTrip(){
-  const t=S.trip;const b=balances();
-  const hotel=t.hotelName||t.hotelAddress||t.confirmation?`
-    <dl class="kv panel">
-      ${t.hotelName?`<dt>Hotel</dt><dd><b>${esc(t.hotelName)}</b></dd>`:''}
-      ${t.hotelAddress?`<dt>Address</dt><dd>${esc(t.hotelAddress)} · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.hotelAddress)}" target="_blank" rel="noopener">Map</a></dd>`:''}
-      ${t.hotelPhone?`<dt>Phone</dt><dd class="num">${esc(t.hotelPhone)}</dd>`:''}
-      ${t.confirmation?`<dt>Confirmation #</dt><dd class="num">${esc(t.confirmation)}</dd>`:''}
-      ${t.bookedUnder?`<dt>Booked under</dt><dd>${esc(t.bookedUnder)}</dd>`:''}
-      ${t.checkIn||t.checkOut?`<dt>Check-in / out</dt><dd>${esc([t.checkIn&&dLong(t.checkIn)+(t.checkInTime?' '+t.checkInTime:''),t.checkOut&&dLong(t.checkOut)+(t.checkOutTime?' '+t.checkOutTime:'')].filter(Boolean).join(' → '))}</dd>`:''}
-      ${t.rooms?`<dt>Rooms</dt><dd>${esc(t.rooms)}</dd>`:''}
-      ${t.wifi?`<dt>Wi-Fi</dt><dd>${esc(t.wifi)}</dd>`:''}
-    </dl>`:`<div class="empty"><b>No hotel details yet</b><span>Add the hotel, confirmation number and check-in times so nobody has to dig through texts.</span><button class="btn primary" data-act="trip-edit">Add hotel details</button></div>`;
-  const girls=S.girls.length?`<div class="girls">${sortedGirls().map(g=>`
-    <button class="girl" data-act="girl-edit" data-id="${g.id}">
-      <div class="girl-top">${av(g.id)}<div><div class="girl-name">${esc(g.name)}</div><div class="small">${esc([g.phone,g.payHandle].filter(Boolean).join(' · ')||'Tap to add phone & Venmo')}</div></div></div>
+  const t=S.trip;const b=balances();const me=meId();
+  const hotels=S.hotels.length?[...S.hotels].sort((a,c)=>(a.checkIn||'').localeCompare(c.checkIn||'')||(a.createdAt||0)-(c.createdAt||0)).map(h=>{
+    const tot=linkedTotal('hotel',h.id);const n=(h.guests||[]).filter(girl).length;
+    return `<div class="panel hotelcard">
+      <div class="sec-head"><h3 style="font-size:17px">${esc(h.name)}</h3><button class="btn sm" data-act="hotel-edit" data-id="${h.id}">Edit</button></div>
+      <dl class="kv">
+        ${h.address?`<dt>Address</dt><dd>${esc(h.address)} · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(h.address)}" target="_blank" rel="noopener">Map</a></dd>`:''}
+        ${h.phone?`<dt>Phone</dt><dd class="num">${esc(h.phone)}</dd>`:''}
+        ${h.confirmation?`<dt>Confirmation #</dt><dd class="num">${esc(h.confirmation)}</dd>`:''}
+        ${h.bookedUnder?`<dt>Booked under</dt><dd>${esc(h.bookedUnder)}</dd>`:''}
+        ${h.checkIn||h.checkOut?`<dt>Check-in / out</dt><dd>${esc([h.checkIn&&dLong(h.checkIn)+(h.checkInTime?' '+h.checkInTime:''),h.checkOut&&dLong(h.checkOut)+(h.checkOutTime?' '+h.checkOutTime:'')].filter(Boolean).join(' → '))}</dd>`:''}
+        ${h.rooms?`<dt>Rooms</dt><dd>${esc(h.rooms)}</dd>`:''}
+        ${h.wifi?`<dt>Wi-Fi</dt><dd>${esc(h.wifi)}</dd>`:''}
+        <dt>Staying here</dt><dd class="who">${whoList(h.guests)}</dd>
+        <dt>Hotel charges</dt><dd><span class="num">${fmt(tot)}</span>${tot&&n?` <span class="small">· about <span class="num">${fmt(Math.round(tot/n))}</span> each</span>`:''}</dd>
+      </dl>
+      <div><button class="btn primary sm" data-act="hotel-charge" data-id="${h.id}">Add a charge for this hotel</button></div>
+    </div>`}).join(''):`<div class="empty"><b>No hotels yet</b><span>Add each hotel and check who’s staying there. Room charges get split only between those girls.</span><button class="btn primary" data-act="hotel-new">Add a hotel</button></div>`;
+  const girls=S.girls.length?`<div class="girls">${sortedGirls().map(g=>{
+    const hs=S.hotels.filter(h=>(h.guests||[]).includes(g.id)).map(h=>h.name);
+    return `<button class="girl" data-act="girl-edit" data-id="${g.id}">
+      <div class="girl-top">${av(g.id)}<div><div class="girl-name">${esc(g.name)}${g.id===me?' <span class="chip">You</span>':''}</div><div class="small">${esc([g.phone,g.payHandle].filter(Boolean).join(' · ')||'Tap to add phone & Venmo')}</div></div></div>
+      ${hs.length?`<div class="small">Staying at ${esc(hs.join(', '))}</div>`:''}
       ${(g.cards||'').trim()?`<div class="chips">${g.cards.split(',').map(c=>c.trim()).filter(Boolean).map(c=>`<span class="chip">${esc(c)}</span>`).join('')}</div>`:''}
       <div class="small">Paid so far <span class="num">${fmt(b[g.id]?.paid)}</span></div>
-    </button>`).join('')}</div>`:`<div class="empty"><b>Who’s coming?</b><span>Add each girl with her phone, Venmo or Zelle, and the cards she might use.</span><button class="btn primary" data-act="girl-new">Add a girl</button></div>`;
+    </button>`}).join('')}</div>`:`<div class="empty"><b>Who’s coming?</b><span>Each girl is added automatically when she signs in. You can also add someone yourself.</span><button class="btn primary" data-act="girl-new">Add a girl</button></div>`;
   return `
-  <section class="sec"><div class="sec-head"><h2>The girls</h2>${S.girls.length?'<button class="btn primary sm" data-act="girl-new">Add girl</button>':''}</div>${girls}</section>
-  <section class="sec"><div class="sec-head"><h2>Hotel & trip details</h2><button class="btn sm" data-act="trip-edit">Edit</button></div>${hotel}
+  <section class="sec"><div class="sec-head"><div><h2>The girls</h2><div class="sub">Everyone shows up here when they sign in.</div></div>${S.girls.length?'<button class="btn sm" data-act="girl-new">Add girl</button>':''}</div>${girls}</section>
+  <section class="sec"><div class="sec-head"><div><h2>Hotels</h2><div class="sub">Hotel costs split only between the girls staying there.</div></div>${S.hotels.length?'<button class="btn primary sm" data-act="hotel-new">Add hotel</button>':''}</div>${hotels}</section>
+  <section class="sec"><div class="sec-head"><h2>Trip details</h2><button class="btn sm" data-act="trip-edit">Edit</button></div>
+    ${t.notes||t.emergency?'':`<div class="sub">Set the trip dates, emergency contacts and notes with Edit.</div>`}
     ${t.notes?`<div class="panel"><div class="eyebrow" style="color:var(--muted)">Notes</div><div style="white-space:pre-wrap">${esc(t.notes)}</div></div>`:''}
     ${t.emergency?`<div class="panel"><div class="eyebrow" style="color:var(--muted)">Emergency contacts</div><div style="white-space:pre-wrap">${esc(t.emergency)}</div></div>`:''}
   </section>`;
@@ -394,6 +427,7 @@ function tripDays(){
   const s=pd(S.trip.startDate),e=pd(S.trip.endDate);const set=new Set();
   if(s&&e&&e>=s&&(e-s)/864e5<31){for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1))set.add(iso(d))}
   S.plans.forEach(p=>p.date&&set.add(p.date));
+  S.hotels.forEach(h=>{h.checkIn&&set.add(h.checkIn);h.checkOut&&set.add(h.checkOut)});
   S.expenses.filter(x=>x.ride&&x.date&&x.ride.time).forEach(x=>set.add(x.date));
   return [...set].sort();
 }
@@ -406,15 +440,21 @@ function vPlans(){
       <div class="row-main"><span class="row-title">${esc(p.title)}</span>
         <span class="small">${esc([p.location,p.confirmation&&'Conf # '+p.confirmation,p.cost&&p.cost+' per person'].filter(Boolean).join(' · '))}</span>
         ${p.notes?`<span class="small">${esc(p.notes)}</span>`:''}</div>
-      <div style="display:grid;gap:5px;justify-items:end"><span class="chip">${esc(p.kind||'Plan')}</span>${(p.going||[]).length?`<span class="stack">${(p.going||[]).filter(girl).map(id=>av(id,'xs')).join('')}</span>`:''}</div>
+      <div style="display:grid;gap:6px;justify-items:end"><span class="chip">${esc(p.kind||'Plan')}</span>${(p.going||[]).filter(girl).length?`<span class="stack">${(p.going||[]).filter(girl).map(id=>av(id,'xs')).join('')}</span>`:''}
+        ${linkedTotal('plan',p.id)?`<span class="small num">${fmt(linkedTotal('plan',p.id))}</span>`:''}<button class="btn sm" data-act="plan-charge" data-id="${p.id}">Add cost</button></div>
     </div>`;
+  const stay=(h,kind)=>`<div class="plan" data-act="hotel-edit" data-id="${h.id}">
+      <span class="time">${esc(kind==='in'?(h.checkInTime||'Check-in'):(h.checkOutTime||'Check-out'))}</span>
+      <div class="row-main"><span class="row-title">${kind==='in'?'Check in':'Check out'}: ${esc(h.name)}</span><span class="small">${esc((h.guests||[]).filter(girl).map(gname).join(', ')||'Nobody added yet')}</span></div>
+      <span class="chip">Hotel</span></div>`;
   const ride=x=>`<div class="plan" data-act="exp-edit" data-id="${x.id}">
       <span class="time">${t12(x.ride.time)}</span>
       <div class="row-main"><span class="row-title">${esc(x.ride.service||'Ride')}: ${esc(x.ride.from||'?')} → ${esc(x.ride.to||'?')}</span><span class="small">Paid by ${esc(gname(x.paidBy))} · <span class="num">${fmt(x.amountCents)}</span></span></div>
       <span class="chip">Ride</span></div>`;
   const out=days.map(d=>{
     const ps=S.plans.filter(p=>p.date===d);const rs=S.expenses.filter(x=>x.ride&&x.date===d&&x.ride.time);
-    const items=[...ps.map(p=>({t:p.time||'99',h:item(p)})),...rs.map(x=>({t:x.ride.time,h:ride(x)}))].sort((a,b)=>a.t.localeCompare(b.t));
+    const hin=S.hotels.filter(h=>h.checkIn===d),hout=S.hotels.filter(h=>h.checkOut===d);
+    const items=[...hout.map(h=>({t:'00',h:stay(h,'out')})),...ps.map(p=>({t:p.time||'99',h:item(p)})),...rs.map(x=>({t:x.ride.time,h:ride(x)})),...hin.map(h=>({t:'15',h:stay(h,'in')}))].sort((a,b)=>a.t.localeCompare(b.t));
     const dd=pd(d);
     return `<div class="sec"><div class="dayhead"><h3><span class="daynum">${dd.getDate()}</span>${dd.toLocaleDateString('en-US',{weekday:'long',month:'long'})}</h3><button class="btn sm" data-act="plan-new" data-date="${d}">Add</button></div>
       ${items.length?`<div class="list">${items.map(i=>i.h).join('')}</div>`:`<div class="empty" style="padding:12px">Free day — nothing booked</div>`}</div>`;
@@ -424,7 +464,8 @@ function vPlans(){
 
 function expRow(e){
   const n=Object.keys(shares(e)).length;
-  const split=e.splitMode==='custom'?'custom split':n===S.girls.length&&n>1?'split with everyone':n===1?'for '+gname(Object.keys(shares(e))[0]):`split ${n} ways`;
+  const ln=linkName(e);
+  const split=e.splitMode==='linked'&&ln?`split ${n} way${n===1?'':'s'} · ${ln}`:e.splitMode==='custom'?'custom split':n===S.girls.length&&n>1?'split with everyone':n===1?'for '+gname(Object.keys(shares(e))[0]):`split ${n} ways`;
   return `<div class="row" data-act="exp-edit" data-id="${e.id}">
     <div class="row-main"><span class="row-title">${esc(e.title)}</span>
       <span class="small"><span class="chip"><span class="dot" style="background:${catColor(e.category)}"></span>${esc(e.category)}</span> Paid by <b>${esc(gname(e.paidBy))}</b>${e.card?' · '+esc(e.card):''}</span></div>
@@ -509,24 +550,43 @@ const girlOpts=sel=>opts(sortedGirls().map(g=>[g.id,g.name]),sel);
 
 function tripForm(){
   const t=S.trip;
-  openModal('Trip & hotel details',`
+  openModal('Trip details',`
     <div class="f"><label for="t_name">Trip name</label><input id="t_name" value="${esc(t.name||'Vegas Girls Trip')}"></div>
     <div class="two"><div class="f"><label for="t_s">First day</label><input type="date" id="t_s" value="${esc(t.startDate)}"></div><div class="f"><label for="t_e">Last day</label><input type="date" id="t_e" value="${esc(t.endDate)}"></div></div>
-    <div class="f"><label for="t_h">Hotel</label><input id="t_h" value="${esc(t.hotelName)}" placeholder="e.g. Bellagio"></div>
-    <div class="f"><label for="t_a">Hotel address</label><input id="t_a" value="${esc(t.hotelAddress)}"></div>
-    <div class="two"><div class="f"><label for="t_p">Hotel phone</label><input id="t_p" inputmode="tel" value="${esc(t.hotelPhone)}"></div><div class="f"><label for="t_c">Confirmation #</label><input id="t_c" value="${esc(t.confirmation)}"></div></div>
-    <div class="f"><label for="t_bu">Booked under</label><input id="t_bu" value="${esc(t.bookedUnder)}" placeholder="Whose name is on the reservation"></div>
-    <div class="two"><div class="f"><label for="t_ci">Check-in</label><input type="date" id="t_ci" value="${esc(t.checkIn)}"></div><div class="f"><label for="t_cit">Check-in time</label><input id="t_cit" value="${esc(t.checkInTime||'3 pm')}"></div></div>
-    <div class="two"><div class="f"><label for="t_co">Check-out</label><input type="date" id="t_co" value="${esc(t.checkOut)}"></div><div class="f"><label for="t_cot">Check-out time</label><input id="t_cot" value="${esc(t.checkOutTime||'11 am')}"></div></div>
-    <div class="f"><label for="t_r">Rooms & who’s in them</label><input id="t_r" value="${esc(t.rooms)}" placeholder="e.g. Rm 2214: Pennie & Jess"></div>
-    <div class="f"><label for="t_w">Wi-Fi</label><input id="t_w" value="${esc(t.wifi)}"></div>
     <div class="f"><label for="t_em">Emergency contacts</label><textarea id="t_em">${esc(t.emergency)}</textarea></div>
-    <div class="f"><label for="t_n">Notes</label><textarea id="t_n" placeholder="Dress code for Saturday, pool cabana info, flights…">${esc(t.notes)}</textarea></div>`,
+    <div class="f"><label for="t_n">Notes</label><textarea id="t_n" placeholder="Flights, dress code for Saturday, packing list…">${esc(t.notes)}</textarea></div>`,
   {onSave:async()=>{
     if(val('t_s')&&val('t_e')&&val('t_e')<val('t_s'))return 'The last day comes before the first day.';
-    const o={name:val('t_name'),startDate:val('t_s'),endDate:val('t_e'),hotelName:val('t_h'),hotelAddress:val('t_a'),hotelPhone:val('t_p'),confirmation:val('t_c'),bookedUnder:val('t_bu'),checkIn:val('t_ci'),checkInTime:val('t_cit'),checkOut:val('t_co'),checkOutTime:val('t_cot'),rooms:val('t_r'),wifi:val('t_w'),emergency:val('t_em'),notes:val('t_n')};
+    const o={...S.trip,name:val('t_name'),startDate:val('t_s'),endDate:val('t_e'),emergency:val('t_em'),notes:val('t_n')};
     return write(()=>backend.save('trip','main',o));
   }});
+}
+
+function guestChecks(prefix,sel){
+  return `<div class="checks">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="${prefix}${g.id}" ${(sel||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><span></span></label>`).join('')}</div>`;
+}
+const checkedIds=prefix=>sortedGirls().filter(g=>document.getElementById(prefix+g.id)?.checked).map(g=>g.id);
+
+function hotelForm(id){
+  const me=meId();
+  const h=id?hotel(id):{checkIn:S.trip.startDate||'',checkOut:S.trip.endDate||'',checkInTime:'3 pm',checkOutTime:'11 am',guests:me?[me]:[]};
+  const linked=id?S.expenses.filter(e=>e.linkType==='hotel'&&e.linkId===id).length:0;
+  openModal(id?'Edit '+(h.name||'hotel'):'Add a hotel',`
+    <div class="f"><label for="h_n">Hotel</label><input id="h_n" value="${esc(h.name)}" placeholder="e.g. Bellagio"></div>
+    ${S.girls.length?`<div class="f"><span class="lbl">Who’s staying here</span>${guestChecks('hg_',h.guests)}<span class="hint">Room charges linked to this hotel split only between the girls checked here. Change it any time and the math updates.</span></div>`:''}
+    <div class="f"><label for="h_a">Address</label><input id="h_a" value="${esc(h.address)}"></div>
+    <div class="two"><div class="f"><label for="h_p">Phone</label><input id="h_p" inputmode="tel" value="${esc(h.phone)}"></div><div class="f"><label for="h_c">Confirmation #</label><input id="h_c" value="${esc(h.confirmation)}"></div></div>
+    <div class="f"><label for="h_bu">Booked under</label><input id="h_bu" value="${esc(h.bookedUnder)}" placeholder="Whose name is on the reservation"></div>
+    <div class="two"><div class="f"><label for="h_ci">Check-in</label><input type="date" id="h_ci" value="${esc(h.checkIn)}"></div><div class="f"><label for="h_cit">Check-in time</label><input id="h_cit" value="${esc(h.checkInTime)}"></div></div>
+    <div class="two"><div class="f"><label for="h_co">Check-out</label><input type="date" id="h_co" value="${esc(h.checkOut)}"></div><div class="f"><label for="h_cot">Check-out time</label><input id="h_cot" value="${esc(h.checkOutTime)}"></div></div>
+    <div class="f"><label for="h_r">Rooms</label><input id="h_r" value="${esc(h.rooms)}" placeholder="e.g. Rm 2214: Pennie & Jess"></div>
+    <div class="f"><label for="h_w">Wi-Fi</label><input id="h_w" value="${esc(h.wifi)}"></div>`,
+  {onSave:async()=>{
+    const name=val('h_n');if(!name)return 'Add the hotel name.';
+    if(val('h_ci')&&val('h_co')&&val('h_co')<val('h_ci'))return 'Check-out comes before check-in.';
+    const o={name,guests:checkedIds('hg_'),address:val('h_a'),phone:val('h_p'),confirmation:val('h_c'),bookedUnder:val('h_bu'),checkIn:val('h_ci'),checkInTime:val('h_cit'),checkOut:val('h_co'),checkOutTime:val('h_cot'),rooms:val('h_r'),wifi:val('h_w'),createdAt:h.createdAt||Date.now()};
+    return write(()=>backend.save('hotels',id||uid(),o));
+  },onDelete:id?async()=>linked?`${linked} charge${linked===1?' is':'s are'} linked to this hotel. Delete those or change what they’re for first.`:write(()=>backend.remove('hotels',id)):null});
 }
 
 function girlForm(id){
@@ -535,23 +595,60 @@ function girlForm(id){
   openModal(id?'Edit '+(g.name||''):'Add a girl',`
     <div class="f"><label for="g_n">Name</label><input id="g_n" value="${esc(g.name)}" autocomplete="off"></div>
     <div class="two"><div class="f"><label for="g_p">Phone</label><input id="g_p" inputmode="tel" value="${esc(g.phone)}"></div><div class="f"><label for="g_v">Venmo / Zelle / Cash App</label><input id="g_v" value="${esc(g.payHandle)}" placeholder="@venmo-name"></div></div>
-    <div class="f"><label for="g_c">Cards she might use</label><input id="g_c" value="${esc(g.cards)}" placeholder="Chase Sapphire 4417, Amex Gold"><span class="hint">Separate with commas. Use a nickname or the last 4 digits only — never the full card number.</span></div>`,
+    <div class="f"><label for="g_c">Cards she might use</label><input id="g_c" value="${esc(g.cards)}" placeholder="Chase Sapphire 4417, Amex Gold"><span class="hint">Separate with commas. Use a nickname or the last 4 digits only — never the full card number.</span></div>
+    ${g.email?`<div class="hint">Signs in as ${esc(g.email)}</div>`:id?'':`<div class="hint">Girls who sign in add themselves. Use this only for someone who won’t be using the app.</div>`}`,
   {onSave:async()=>{
     const name=val('g_n');if(!name)return 'Add her name.';
     if(/\d{12,}/.test(val('g_c').replace(/[\s-]/g,'')))return 'That looks like a full card number. Use only the last 4 digits.';
-    const o={name,phone:val('g_p'),payHandle:val('g_v'),cards:val('g_c'),createdAt:g.createdAt||Date.now()};
+    const o={name,phone:val('g_p'),payHandle:val('g_v'),cards:val('g_c'),email:g.email||'',createdAt:g.createdAt||Date.now()};
     return write(()=>backend.save('girls',id||uid(),o));
   },onDelete:id?async()=>used?`${g.name} has expenses or payments. Remove those first so the math stays right.`:write(()=>backend.remove('girls',id)):null});
 }
 
+/* First sign-in: put the signed-in girl on the list (or let her claim a name someone already added). */
+let welcomed=false;
+function ensureMe(){
+  if(!ME_EMAIL||welcomed||meId())return;welcomed=true;
+  const unclaimed=sortedGirls().filter(g=>!g.email);
+  const guess=ME_EMAIL.split('@')[0].replace(/[^a-z]/gi,'').toLowerCase();
+  const pre=unclaimed.find(g=>guess.startsWith(g.name.toLowerCase().replace(/[^a-z]/g,'')))||null;
+  openModal('Welcome to the trip!',`
+    <p class="sub" style="margin:0">Add yourself so everyone knows who paid for what. You’re signed in as <b>${esc(ME_EMAIL)}</b>.</p>
+    ${unclaimed.length?`<div class="f"><label for="w_who">Are you already on the list?</label><select id="w_who"><option value="">No, add me as new</option>${unclaimed.map(g=>`<option value="${g.id}" ${pre&&pre.id===g.id?'selected':''}>Yes, I’m ${esc(g.name)}</option>`).join('')}</select></div>`:''}
+    <div class="f"><label for="w_n">Your name</label><input id="w_n" value="${esc(pre?.name)}" autocomplete="given-name"></div>
+    <div class="two"><div class="f"><label for="w_p">Phone</label><input id="w_p" inputmode="tel" value="${esc(pre?.phone)}"></div><div class="f"><label for="w_v">Venmo / Zelle / Cash App</label><input id="w_v" value="${esc(pre?.payHandle)}" placeholder="@venmo-name"></div></div>
+    <div class="f"><label for="w_c">Cards you might use</label><input id="w_c" value="${esc(pre?.cards)}" placeholder="Amex Gold, Chase 4417"><span class="hint">Nickname or last 4 digits only.</span></div>`,
+  {saveLabel:'Join the trip',onSave:async()=>{
+    const name=val('w_n');if(!name)return 'Add your name.';
+    if(/\d{12,}/.test(val('w_c').replace(/[\s-]/g,'')))return 'That looks like a full card number. Use only the last 4 digits.';
+    const claim=val('w_who');const ex=claim?girl(claim)||{}:{};
+    const o={name,phone:val('w_p'),payHandle:val('w_v'),cards:val('w_c'),email:ME_EMAIL,createdAt:ex.createdAt||Date.now()};
+    const err=await write(()=>backend.save('girls',claim||uid(),o));
+    if(!err)setTimeout(()=>toast('You’re on the trip, '+name+'!'),50);
+    return err;
+  }});
+  const w=document.getElementById('w_who');
+  if(w)w.addEventListener('change',()=>{const g=girl(w.value)||{};['n:name','p:phone','v:payHandle','c:cards'].forEach(k=>{const[f,p]=k.split(':');document.getElementById('w_'+f).value=g[p]||''})});
+}
+
 function cardList(gid){const g=girl(gid);return (g?.cards||'').split(',').map(s=>s.trim()).filter(Boolean)}
+function linkOptions(sel){
+  const hs=[...S.hotels].sort((a,c)=>(a.name||'').localeCompare(c.name||''));
+  const ps=[...S.plans].sort((a,c)=>((a.date||'9')+(a.time||'')).localeCompare((c.date||'9')+(c.time||'')));
+  return `<option value="">Nothing specific</option>`+
+    (hs.length?`<optgroup label="Hotels">${hs.map(h=>`<option value="hotel:${h.id}" ${sel==='hotel:'+h.id?'selected':''}>${esc(h.name)}</option>`).join('')}</optgroup>`:'')+
+    (ps.length?`<optgroup label="Activities">${ps.map(p=>`<option value="plan:${p.id}" ${sel==='plan:'+p.id?'selected':''}>${esc(p.title)}${p.date?' ('+dShort(p.date)+')':''}</option>`).join('')}</optgroup>`:'');
+}
 function expForm(id,preset={}){
   if(!S.girls.length){girlForm();return}
-  const e=id?S.expenses.find(x=>x.id===id):{category:'Food',date:todayIso(),splitMode:'equal',splitAmong:S.girls.map(g=>g.id),...preset};
+  const e=id?S.expenses.find(x=>x.id===id):{category:'Food',date:todayIso(),splitMode:'equal',splitAmong:S.girls.map(g=>g.id),paidBy:meId()||undefined,...preset};
   const isRide=()=>val('e_cat')==='Ride share';
   const custom=e.custom||{};
+  const link0=e.linkType&&e.linkId?e.linkType+':'+e.linkId:'';
+  const mode0=e.splitMode==='custom'?'custom':e.splitMode==='linked'&&link0?'linked':'equal';
   openModal(id?'Edit expense':preset.category==='Ride share'?'Add a ride':'Add expense',`
-    <div class="two"><div class="f"><label for="e_t">What for?</label><input id="e_t" value="${esc(e.title)}" placeholder="${preset.category==='Ride share'?'Uber to the Strip':'Dinner at Nobu'}"></div>
+    <div class="f"><label for="e_for">Part of a hotel or activity?</label><select id="e_for">${linkOptions(link0)}</select><span class="hint">Pick one and the cost splits only between the girls staying there or going.</span></div>
+    <div class="two"><div class="f"><label for="e_t">Description</label><input id="e_t" value="${esc(e.title)}" placeholder="${preset.category==='Ride share'?'Uber to the Strip':'Dinner at Nobu'}"></div>
       <div class="f"><label for="e_a">Amount (with tip & tax)</label><input id="e_a" inputmode="decimal" value="${e.amountCents?(e.amountCents/100).toFixed(2):''}" placeholder="0.00"></div></div>
     <div class="two"><div class="f"><label for="e_cat">Category</label><select id="e_cat">${opts(CATS,e.category)}</select></div><div class="f"><label for="e_d">Date</label><input type="date" id="e_d" value="${esc(e.date)}"></div></div>
     <div id="ridebox" class="fields" ${e.category==='Ride share'?'':'hidden'}>
@@ -561,50 +658,74 @@ function expForm(id,preset={}){
     <div class="two"><div class="f"><label for="e_pb">Who paid?</label><select id="e_pb">${girlOpts(e.paidBy||sortedGirls()[0].id)}</select></div>
       <div class="f"><label for="e_card">Card used</label><input id="e_card" list="cardlist" value="${esc(e.card)}" placeholder="Card nickname or last 4"><datalist id="cardlist"></datalist></div></div>
     <div class="f"><span class="lbl">Split between</span>
-      <div class="seg" role="group"><button type="button" data-split="equal" aria-pressed="${e.splitMode!=='custom'}">Equally</button><button type="button" data-split="custom" aria-pressed="${e.splitMode==='custom'}">Custom amounts</button></div>
-      <input type="hidden" id="e_sm" value="${e.splitMode==='custom'?'custom':'equal'}">
-      <div class="checks" id="splitbox">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="sp_${g.id}" ${e.splitMode==='custom'?(custom[g.id]?'checked':''):(e.splitAmong||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><input type="number" step="0.01" min="0" inputmode="decimal" id="cu_${g.id}" value="${custom[g.id]?(custom[g.id]/100).toFixed(2):''}" ${e.splitMode==='custom'?'':'hidden'} aria-label="${esc(g.name)} amount"></label>`).join('')}</div>
+      <div class="seg" role="group"><button type="button" data-split="linked" id="seg_linked">Everyone in it</button><button type="button" data-split="equal">Pick girls</button><button type="button" data-split="custom">Custom amounts</button></div>
+      <input type="hidden" id="e_sm" value="${mode0}">
+      <div class="checks" id="splitbox">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="sp_${g.id}" ${e.splitMode==='custom'?(custom[g.id]?'checked':''):(e.splitAmong||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><input type="number" step="0.01" min="0" inputmode="decimal" id="cu_${g.id}" value="${custom[g.id]?(custom[g.id]/100).toFixed(2):''}" hidden aria-label="${esc(g.name)} amount"></label>`).join('')}</div>
       <span class="hint" id="splithint"></span></div>
     <div class="f"><label for="e_n">Notes</label><input id="e_n" value="${esc(e.notes)}" placeholder="Optional"></div>`,
   {onSave:async()=>{
     const title=val('e_t'),amt=toCents(val('e_a'));
-    if(!title)return 'Say what the expense was for.';
+    if(!title)return 'Add a short description.';
     if(!(amt>0))return 'Enter the amount, like 84.50.';
     if(/\d{12,}/.test(val('e_card').replace(/[\s-]/g,'')))return 'That looks like a full card number. Use a nickname or last 4 only.';
-    const mode=val('e_sm');const o={title,amountCents:amt,category:val('e_cat'),date:val('e_d'),paidBy:val('e_pb'),card:val('e_card'),notes:val('e_n'),splitMode:mode,createdAt:e.createdAt||Date.now()};
+    const mode=val('e_sm');const link=val('e_for');
+    const o={title,amountCents:amt,category:val('e_cat'),date:val('e_d'),paidBy:val('e_pb'),card:val('e_card'),notes:val('e_n'),splitMode:mode,createdAt:e.createdAt||Date.now()};
+    if(link){const[t,i]=link.split(':');o.linkType=t;o.linkId=i}
     if(mode==='custom'){const c={};let sum=0;sortedGirls().forEach(g=>{const v=toCents(val('cu_'+g.id)||'0');if(document.getElementById('sp_'+g.id).checked&&v>0){c[g.id]=v;sum+=v}});
       if(!sum)return 'Enter how much each girl owes.';
       if(sum!==amt)return `Custom amounts add up to ${fmt(sum)} but the expense is ${fmt(amt)}.`;
       o.custom=c;o.splitAmong=Object.keys(c);}
-    else{o.splitAmong=sortedGirls().filter(g=>document.getElementById('sp_'+g.id).checked).map(g=>g.id);if(!o.splitAmong.length)return 'Pick at least one girl to split with.';}
+    else if(mode==='linked'){const m=(curMembers()||[]).filter(girl);if(!m.length)return `Nobody is marked as ${link.startsWith('hotel')?'staying at':'going to'} ${curName()} yet. Edit it to add who’s in, or tap Pick girls.`;o.splitAmong=m;}
+    else{o.splitAmong=checkedIds('sp_');if(!o.splitAmong.length)return 'Pick at least one girl to split with.';}
     if(o.category==='Ride share')o.ride={service:val('r_s'),time:val('r_t'),from:val('r_f'),to:val('r_to')};
     return write(()=>backend.save('expenses',id||uid(),o));
   },onDelete:id?async()=>write(()=>backend.remove('expenses',id)):null});
+  function curMembers(){const v=val('e_for');if(!v)return null;const[t,i]=v.split(':');return t==='hotel'?(hotel(i)?.guests||[]):(plan(i)?.going||[])}
+  function curName(){const v=val('e_for');if(!v)return '';const[t,i]=v.split(':');return t==='hotel'?(hotel(i)?.name||''):(plan(i)?.title||'')}
   const syncCards=()=>{$('#cardlist').innerHTML=cardList(val('e_pb')).map(c=>`<option value="${esc(c)}">`).join('');if(!id&&!val('e_card')){const c=cardList(val('e_pb'));if(c.length===1)$('#e_card').value=c[0]}};
-  const hint=()=>{const amt=toCents(val('e_a'))||0;
-    if(val('e_sm')==='custom'){let sum=0;sortedGirls().forEach(g=>{if(document.getElementById('sp_'+g.id).checked)sum+=toCents(val('cu_'+g.id)||'0')||0});const left=amt-sum;$('#splithint').textContent=left===0?'Adds up.':left>0?`${fmt(left)} left to assign`:`${fmt(-left)} too much`}
-    else{const n=sortedGirls().filter(g=>document.getElementById('sp_'+g.id).checked).length;$('#splithint').textContent=n&&amt?`${fmt(Math.floor(amt/n))} each, ${n} way${n===1?'':'s'}`:''}};
-  syncCards();hint();
+  const hint=()=>{const amt=toCents(val('e_a'))||0;const m=val('e_sm');
+    if(m==='custom'){let sum=0;sortedGirls().forEach(g=>{if(document.getElementById('sp_'+g.id).checked)sum+=toCents(val('cu_'+g.id)||'0')||0});const left=amt-sum;$('#splithint').textContent=left===0?'Adds up.':left>0?`${fmt(left)} left to assign`:`${fmt(-left)} too much`}
+    else if(m==='linked'){const n=(curMembers()||[]).filter(girl).length;const where=(val('e_for').startsWith('hotel')?'staying at ':'going to ')+curName();
+      $('#splithint').textContent=n?`${amt?fmt(Math.floor(amt/n))+' each, ':''}split between the ${n} girl${n===1?'':'s'} ${where}. If that list changes later, this updates automatically.`:`Nobody is marked as ${where} yet.`}
+    else{const n=checkedIds('sp_').length;$('#splithint').textContent=n&&amt?`${fmt(Math.floor(amt/n))} each, ${n} way${n===1?'':'s'}`:''}};
+  function setMode(m){
+    if(m==='linked'&&!val('e_for'))m='equal';
+    $('#e_sm').value=m;
+    $('#mform').querySelectorAll('[data-split]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.split===m));
+    $('#seg_linked').hidden=!val('e_for');
+    const mem=m==='linked'?(curMembers()||[]):null;
+    sortedGirls().forEach(g=>{const cb=document.getElementById('sp_'+g.id);document.getElementById('cu_'+g.id).hidden=m!=='custom';cb.disabled=!!mem;if(mem)cb.checked=mem.includes(g.id)});
+    hint();
+  }
+  syncCards();setMode(mode0);
   $('#e_pb').addEventListener('change',()=>{$('#e_card').value='';syncCards()});
   $('#e_cat').addEventListener('change',()=>$('#ridebox').hidden=!isRide());
+  $('#e_for').addEventListener('change',()=>{
+    const v=val('e_for');
+    if(v){const[t,i]=v.split(':');const c=t==='hotel'?'Hotel':PLAN_CAT[plan(i)?.kind];if(c){$('#e_cat').value=c;$('#ridebox').hidden=!isRide()}
+      if(!val('e_t'))$('#e_t').value=t==='hotel'?'Room':(plan(i)?.title||'');setMode(val('e_sm')==='custom'?'custom':'linked')}
+    else setMode(val('e_sm')==='linked'?'equal':val('e_sm'));
+  });
   $('#mform').addEventListener('input',hint);
-  $('#mform').querySelectorAll('[data-split]').forEach(b=>b.addEventListener('click',()=>{const m=b.dataset.split;$('#e_sm').value=m;$('#mform').querySelectorAll('[data-split]').forEach(x=>x.setAttribute('aria-pressed',x===b));sortedGirls().forEach(g=>document.getElementById('cu_'+g.id).hidden=m!=='custom');hint()}));
+  $('#mform').querySelectorAll('[data-split]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.split)));
 }
 
 function planForm(id,date){
-  const p=id?S.plans.find(x=>x.id===id):{kind:'Dinner',date:date||S.trip.startDate||'',going:S.girls.map(g=>g.id)};
+  const me=meId();
+  const p=id?plan(id):{kind:'Dinner',date:date||S.trip.startDate||'',going:me?[me]:[]};
+  const linked=id?S.expenses.filter(e=>e.linkType==='plan'&&e.linkId===id).length:0;
   openModal(id?'Edit plan':'Add a plan',`
     <div class="f"><label for="p_t">What’s the plan?</label><input id="p_t" value="${esc(p.title)}" placeholder="Brunch at Mon Ami Gabi"></div>
     <div class="two"><div class="f"><label for="p_k">Type</label><select id="p_k">${opts(PLAN_KINDS,p.kind)}</select></div><div class="f"><label for="p_l">Where</label><input id="p_l" value="${esc(p.location)}"></div></div>
     <div class="two"><div class="f"><label for="p_d">Date</label><input type="date" id="p_d" value="${esc(p.date)}"><span class="hint">Leave blank for “someday” ideas.</span></div><div class="f"><label for="p_tm">Time</label><input type="time" id="p_tm" value="${esc(p.time)}"></div></div>
+    ${S.girls.length?`<div class="f"><span class="lbl">Who’s going</span>${guestChecks('pg_',p.going)}<span class="hint">Costs for this activity split only between the girls checked here.</span></div>`:''}
     <div class="two"><div class="f"><label for="p_c">Confirmation #</label><input id="p_c" value="${esc(p.confirmation)}"></div><div class="f"><label for="p_cost">Cost per person</label><input id="p_cost" value="${esc(p.cost)}" placeholder="$85"></div></div>
-    ${S.girls.length?`<div class="f"><span class="lbl">Who’s going</span><div class="checks">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="pg_${g.id}" ${(p.going||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><span></span></label>`).join('')}</div></div>`:''}
     <div class="f"><label for="p_n">Notes</label><input id="p_n" value="${esc(p.notes)}" placeholder="Dress code, who booked it…"></div>`,
   {onSave:async()=>{
     const title=val('p_t');if(!title)return 'Give the plan a name.';
-    const o={title,kind:val('p_k'),location:val('p_l'),date:val('p_d'),time:val('p_tm'),confirmation:val('p_c'),cost:val('p_cost'),notes:val('p_n'),going:sortedGirls().filter(g=>document.getElementById('pg_'+g.id)?.checked).map(g=>g.id),createdAt:p.createdAt||Date.now()};
+    const o={title,kind:val('p_k'),location:val('p_l'),date:val('p_d'),time:val('p_tm'),confirmation:val('p_c'),cost:val('p_cost'),notes:val('p_n'),going:checkedIds('pg_'),createdAt:p.createdAt||Date.now()};
     return write(()=>backend.save('plans',id||uid(),o));
-  },onDelete:id?async()=>write(()=>backend.remove('plans',id)):null});
+  },onDelete:id?async()=>linked?`${linked} cost${linked===1?' is':'s are'} linked to this plan. Delete those or change what they’re for first.`:write(()=>backend.remove('plans',id)):null});
 }
 
 function payForm(id,pre={}){
@@ -645,6 +766,10 @@ document.addEventListener('click',async ev=>{
   else if(a==='exp-new')expForm();
   else if(a==='ride-new')expForm(null,{category:'Ride share',title:'Uber'});
   else if(a==='exp-edit')expForm(id);
+  else if(a==='hotel-new')hotelForm();
+  else if(a==='hotel-edit')hotelForm(id);
+  else if(a==='hotel-charge'){const h=hotel(id);expForm(null,{category:'Hotel',title:'Room',linkType:'hotel',linkId:id,splitMode:'linked',date:h?.checkIn||todayIso()})}
+  else if(a==='plan-charge'){const p=plan(id);expForm(null,{category:PLAN_CAT[p?.kind]||'Other',title:p?.title||'',linkType:'plan',linkId:id,splitMode:'linked',date:p?.date||todayIso()})}
   else if(a==='plan-new')planForm(null,t.dataset.date);
   else if(a==='plan-edit')planForm(id);
   else if(a==='pay-new')payForm(null,{from:t.dataset.from,to:t.dataset.to,amt:+t.dataset.amt||0});
@@ -670,11 +795,12 @@ function showSignin(){
 }
 let started=false;
 function startApp(sb,email){
+  ME_EMAIL=(email||'').toLowerCase();
   showApp(true);$('#signout').hidden=!sb;
   if(email)$('#signout').textContent='Sign out ('+email+')';
   if(started)return;started=true;
   backend=sb?supaBackend(sb):localBackend();
-  route();backend.start();setSync();
+  route();backend.start(ensureMe);setSync();
 }
 (async()=>{
   renderHero();
