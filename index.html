@@ -200,25 +200,10 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
   <section class="signin" id="signin" hidden>
     <form class="panel" id="signinform" novalidate>
       <h2>Join the trip</h2>
-      <p class="sub" style="margin:0">Enter your email and we’ll send you a sign-in code. No password, no app to download.</p>
-      <div class="f"><label for="si_email">Your email</label><input type="email" id="si_email" autocomplete="email" inputmode="email" placeholder="you@example.com" required></div>
-      <button class="btn primary" type="submit" id="si_btn">Email me a sign-in code</button>
+      <p class="sub" style="margin:0">Enter the trip passcode from the group text. You only do this once on each phone.</p>
+      <div class="f"><label for="si_code">Trip passcode</label><input id="si_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.12em;font-size:18px"></div>
+      <button class="btn primary" type="submit" id="si_btn">Open the trip</button>
       <div class="err" id="si_err" hidden></div>
-    </form>
-    <form class="panel" id="si_sent" hidden novalidate>
-      <h2>Check your email</h2>
-      <p style="margin:0">We emailed a sign-in link to <b id="si_to"></b>. It can take a minute, so check spam too.</p>
-      <ol class="steps" id="si_steps">
-        <li>In the email, <b>press and hold</b> the <b>Sign in</b> link (don’t tap it).</li>
-        <li>Choose <b>Copy Link</b>.</li>
-        <li>Come back here and tap <b>Paste link</b>.</li>
-      </ol>
-      <button class="btn primary" type="button" id="si_paste">Paste link</button>
-      <div class="f"><label for="si_code">Or paste it here yourself</label><input id="si_code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…supabase.co/auth/v1/verify…"></div>
-      <button class="btn" type="submit" id="si_vbtn">Sign in</button>
-      <p class="sub" style="margin:0">On a computer? You can just click the link in the email instead.</p>
-      <div class="err" id="si_verr" hidden></div>
-      <button class="btn" type="button" id="si_again">Use a different email</button>
     </form>
   </section>
   <nav class="tabs" id="tabs" aria-label="Sections" hidden></nav>
@@ -240,8 +225,10 @@ window.TRIP_CONFIG={
 (function(){
 const COLS=['girls','expenses','plans','payments','hotels'];
 const S={trip:{},girls:[],expenses:[],plans:[],payments:[],hotels:[],loaded:false};
-let ME_EMAIL='';
-const meId=()=>{if(!ME_EMAIL)return null;const g=S.girls.find(g=>(g.email||'').toLowerCase()===ME_EMAIL);return g?g.id:null};
+const ME_KEY='vegas-trip-me',CODE_KEY='vegas-trip-code';
+const lsGet=k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}};
+const lsSet=(k,v)=>{try{v?localStorage.setItem(k,v):localStorage.removeItem(k)}catch(e){}};
+const meId=()=>{const id=lsGet(ME_KEY);return id&&girl(id)?id:null};
 const hotel=id=>S.hotels.find(h=>h.id===id);
 const plan=id=>S.plans.find(p=>p.id===id);
 const PLAN_CAT={Show:'Shows & tickets',Dinner:'Food',Brunch:'Food',Club:'Clubs & cover','Pool party':'Pool & spa',Spa:'Pool & spa',Shopping:'Shopping',Drinks:'Drinks',Flight:'Flights',Tour:'Shows & tickets'};
@@ -324,7 +311,7 @@ function localBackend(){
   };
 }
 /* Supabase table: trip_items (trip_id, id, kind, data, updated_at). One row per girl/expense/plan/payment, plus one 'trip' row. */
-function supaBackend(sb){
+function supaBackend(sb,code){
   const TRIP=window.TRIP_CONFIG.TRIP_ID;
   const apply=row=>{
     if(!row||row.trip_id!==TRIP)return;
@@ -333,48 +320,51 @@ function supaBackend(sb){
     const itemId=row.id.slice(row.kind.length+1);const a=S[row.kind];const i=a.findIndex(x=>x.id===itemId);const r={...(row.data||{}),id:itemId};
     i<0?a.push(r):a[i]=r;
   };
-  const drop=row=>{if(!row||!row.id)return;const k=row.id.split(':')[0];if(COLS.includes(k)){const itemId=row.id.slice(k.length+1);S[k]=S[k].filter(x=>x.id!==itemId)}};
+  const drop=rowId=>{const k=rowId.split(':')[0];if(COLS.includes(k)){const itemId=rowId.slice(k.length+1);S[k]=S[k].filter(x=>x.id!==itemId)}};
+  let sig='';
   async function loadAll(){
-    const {data,error}=await sb.from('trip_items').select('*').eq('trip_id',TRIP);
+    const {data,error}=await sb.rpc('trip_load',{p_trip:TRIP,p_code:code});
     if(error)throw error;
-    COLS.forEach(c=>S[c]=[]);S.trip={};(data||[]).forEach(apply);S.loaded=true;render();
+    const nsig=JSON.stringify((data||[]).map(r=>[r.id,r.updated_at]).sort());
+    if(nsig===sig&&S.loaded)return;sig=nsig;
+    COLS.forEach(c=>S[c]=[]);S.trip={};(data||[]).forEach(apply);S.loaded=true;
+    if(document.getElementById('overlay').hidden)render();else pendingRender=true;
   }
   return{
     shared:true,
     async start(onReady){
-      try{await loadAll()}catch(e){S.loaded=true;render();toast('Couldn’t load the trip. Check your connection and refresh.');return}
-      if(onReady)onReady();
-      sb.channel('trip-'+TRIP).on('postgres_changes',{event:'*',schema:'public',table:'trip_items'},p=>{
-        if(p.eventType==='DELETE')drop(p.old);else apply(p.new);render();
-      }).subscribe(st=>{live=st==='SUBSCRIBED';setSync()});
+      try{await loadAll();live=true}catch(e){S.loaded=true;render();toast('Couldn’t load the trip. Check your connection and refresh.');return}
+      setSync();if(onReady)onReady();
+      setInterval(()=>{if(document.visibilityState==='visible')loadAll().then(()=>{live=true;setSync()}).catch(()=>{live=false;setSync()})},8000);
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')loadAll().catch(()=>{})});
     },
     async save(col,id,obj){
       const rowId=col==='trip'?'trip:main':col+':'+id;
-      const {error}=await sb.from('trip_items').upsert({trip_id:TRIP,id:rowId,kind:col,data:obj,updated_at:new Date().toISOString()});
+      const {error}=await sb.rpc('trip_save',{p_trip:TRIP,p_code:code,p_id:rowId,p_kind:col,p_data:obj});
       if(error)throw error;
       apply({trip_id:TRIP,id:rowId,kind:col,data:obj});render();
     },
     async remove(col,id){
       const rowId=col+':'+id;
-      const {error}=await sb.from('trip_items').delete().eq('trip_id',TRIP).eq('id',rowId);
+      const {error}=await sb.rpc('trip_delete',{p_trip:TRIP,p_code:code,p_id:rowId});
       if(error)throw error;
-      drop({id:rowId});render();
+      drop(rowId);render();
     }
   };
 }
+let pendingRender=false;
 let live=false;
 async function write(fn){
   try{await fn();return null}
   catch(e){
-    if(e&&(e.code==='42501'||/row-level security|permission/i.test(e.message||'')))return 'You’re signed out or don’t have access. Sign out and sign back in with your email.';
+    if(e&&(e.code==='28P01'||/passcode/i.test(e.message||'')))return 'The trip passcode changed. Tap “Switch person” at the top and enter the new one.';
     return 'That didn’t save. Check your connection and try again.';
   }
 }
 function setSync(){
   const el=$('#sync');
   if(!backend){el.textContent='Connecting…';return}
-  el.textContent=!backend.shared?'Demo mode — saved on this device only until the database is connected.':live?'Live — everyone’s changes show up instantly.':'Shared trip — connecting to live updates…';
+  el.textContent=!backend.shared?'Demo mode — saved on this device only until the database is connected.':live?'Shared trip — everyone’s changes show up within a few seconds.':'Can’t reach the trip right now. Changes will show when you’re back online.';
 }
 
 /* ---------- render ---------- */
@@ -441,7 +431,7 @@ function vTrip(){
       <div class="small">Paid so far <span class="num">${fmt(b[g.id]?.paid)}</span></div>
     </button>`}).join('')}</div>`:`<div class="empty"><b>Who’s coming?</b><span>Each girl is added automatically when she signs in. You can also add someone yourself.</span><button class="btn primary" data-act="girl-new">Add a girl</button></div>`;
   return `
-  <section class="sec"><div class="sec-head"><div><h2>The girls</h2><div class="sub">Everyone shows up here when they sign in.</div></div>${S.girls.length?'<button class="btn sm" data-act="girl-new">Add girl</button>':''}</div>${girls}</section>
+  <section class="sec"><div class="sec-head"><div><h2>The girls</h2><div class="sub">Everyone shows up here when they join.</div></div>${S.girls.length?'<button class="btn sm" data-act="girl-new">Add girl</button>':''}</div>${girls}</section>
   <section class="sec"><div class="sec-head"><div><h2>Hotels</h2><div class="sub">Hotel costs split only between the girls staying there.</div></div>${S.hotels.length?'<button class="btn primary sm" data-act="hotel-new">Add hotel</button>':''}</div>${hotels}</section>
   <section class="sec"><div class="sec-head"><h2>Trip details</h2><button class="btn sm" data-act="trip-edit">Edit</button></div>
     ${t.notes||t.emergency?'':`<div class="sub">Set the trip dates, emergency contacts and notes with Edit.</div>`}
@@ -570,7 +560,7 @@ function openModal(title,body,{onSave,onDelete,saveLabel='Save'}){
   o.hidden=false;modalCtx={onSave,onDelete};
   const f=o.querySelector('input,select,textarea');if(f)setTimeout(()=>f.focus(),30);
 }
-function closeModal(){$('#overlay').hidden=true;$('#overlay').innerHTML='';modalCtx=null}
+function closeModal(){$('#overlay').hidden=true;$('#overlay').innerHTML='';modalCtx=null;if(pendingRender){pendingRender=false;render()}}
 function merr(msg){const e=$('#merr');e.textContent=msg;e.hidden=!msg}
 const val=id=>{const el=document.getElementById(id);return el?el.value.trim():''};
 const opts=(arr,sel)=>arr.map(a=>{const[v,l]=Array.isArray(a)?a:[a,a];return `<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`}).join('');
@@ -633,30 +623,29 @@ function girlForm(id){
   },onDelete:id?async()=>used?`${g.name} has expenses or payments. Remove those first so the math stays right.`:write(()=>backend.remove('girls',id)):null});
 }
 
-/* First sign-in: put the signed-in girl on the list (or let her claim a name someone already added). */
+/* First open on a phone: pick who you are (or add yourself). Remembered on this phone. */
 let welcomed=false;
-function ensureMe(){
-  if(!ME_EMAIL||welcomed||meId())return;welcomed=true;
-  const unclaimed=sortedGirls().filter(g=>!g.email);
-  const guess=ME_EMAIL.split('@')[0].replace(/[^a-z]/gi,'').toLowerCase();
-  const pre=unclaimed.find(g=>guess.startsWith(g.name.toLowerCase().replace(/[^a-z]/g,'')))||null;
-  openModal('Welcome to the trip!',`
-    <p class="sub" style="margin:0">Add yourself so everyone knows who paid for what. You’re signed in as <b>${esc(ME_EMAIL)}</b>.</p>
-    ${unclaimed.length?`<div class="f"><label for="w_who">Are you already on the list?</label><select id="w_who"><option value="">No, add me as new</option>${unclaimed.map(g=>`<option value="${g.id}" ${pre&&pre.id===g.id?'selected':''}>Yes, I’m ${esc(g.name)}</option>`).join('')}</select></div>`:''}
-    <div class="f"><label for="w_n">Your name</label><input id="w_n" value="${esc(pre?.name)}" autocomplete="given-name"></div>
-    <div class="two"><div class="f"><label for="w_p">Phone</label><input id="w_p" inputmode="tel" value="${esc(pre?.phone)}"></div><div class="f"><label for="w_v">Venmo / Zelle / Cash App</label><input id="w_v" value="${esc(pre?.payHandle)}" placeholder="@venmo-name"></div></div>
-    <div class="f"><label for="w_c">Cards you might use</label><input id="w_c" value="${esc(pre?.cards)}" placeholder="Amex Gold, Chase 4417"><span class="hint">Nickname or last 4 digits only.</span></div>`,
-  {saveLabel:'Join the trip',onSave:async()=>{
+function ensureMe(force){
+  if(!force&&(welcomed||meId()))return;welcomed=true;
+  const gs=sortedGirls();
+  openModal('Who are you?',`
+    <p class="sub" style="margin:0">Pick your name so the app knows who’s adding expenses on this phone.</p>
+    ${gs.length?`<div class="f"><label for="w_who">I’m…</label><select id="w_who"><option value="">New here, add me</option>${gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></div>`:''}
+    <div class="f"><label for="w_n">Your name</label><input id="w_n" autocomplete="given-name"></div>
+    <div class="two"><div class="f"><label for="w_p">Phone</label><input id="w_p" inputmode="tel"></div><div class="f"><label for="w_v">Venmo / Zelle / Cash App</label><input id="w_v" placeholder="@venmo-name"></div></div>
+    <div class="f"><label for="w_c">Cards you might use</label><input id="w_c" placeholder="Amex Gold, Chase 4417"><span class="hint">Nickname or last 4 digits only.</span></div>`,
+  {saveLabel:'That’s me',onSave:async()=>{
     const name=val('w_n');if(!name)return 'Add your name.';
     if(/\d{12,}/.test(val('w_c').replace(/[\s-]/g,'')))return 'That looks like a full card number. Use only the last 4 digits.';
-    const claim=val('w_who');const ex=claim?girl(claim)||{}:{};
-    const o={name,phone:val('w_p'),payHandle:val('w_v'),cards:val('w_c'),email:ME_EMAIL,createdAt:ex.createdAt||Date.now()};
-    const err=await write(()=>backend.save('girls',claim||uid(),o));
-    if(!err)setTimeout(()=>toast('You’re on the trip, '+name+'!'),50);
+    const claim=val('w_who');const ex=claim?girl(claim)||{}:{};const id=claim||uid();
+    const o={...ex,name,phone:val('w_p'),payHandle:val('w_v'),cards:val('w_c'),createdAt:ex.createdAt||Date.now()};delete o.id;
+    const err=await write(()=>backend.save('girls',id,o));
+    if(!err){lsSet(ME_KEY,id);render();setTimeout(()=>toast('Hi '+name+'! You’re on the trip.'),50)}
     return err;
   }});
   const w=document.getElementById('w_who');
-  if(w)w.addEventListener('change',()=>{const g=girl(w.value)||{};['n:name','p:phone','v:payHandle','c:cards'].forEach(k=>{const[f,p]=k.split(':');document.getElementById('w_'+f).value=g[p]||''})});
+  const fill=()=>{const g=girl(w?w.value:'')||{};['n:name','p:phone','v:payHandle','c:cards'].forEach(k=>{const[f,p]=k.split(':');document.getElementById('w_'+f).value=g[p]||''})};
+  if(w)w.addEventListener('change',fill);
 }
 
 function cardList(gid){const g=girl(gid);return (g?.cards||'').split(',').map(s=>s.trim()).filter(Boolean)}
@@ -817,70 +806,37 @@ window.addEventListener('hashchange',()=>{route();window.scrollTo(0,0)});
 
 /* ---------- boot ---------- */
 function showApp(on){$('#signin').hidden=on;$('#tabs').hidden=!on;$('#main').hidden=!on}
-function showSignin(){
-  showApp(false);renderHero();$('#sync').textContent='Sign in to see the trip.';$('#signout').hidden=true;
-  $('#signinform').hidden=false;$('#si_sent').hidden=true;
-}
 let started=false;
-function startApp(sb,email){
-  ME_EMAIL=(email||'').toLowerCase();
-  showApp(true);$('#signout').hidden=!sb;
-  if(email)$('#signout').textContent='Sign out ('+email+')';
+function startApp(sb,code){
+  showApp(true);
+  const so=$('#signout');so.hidden=!sb;so.textContent='Switch person';
   if(started)return;started=true;
-  backend=sb?supaBackend(sb):localBackend();
-  route();backend.start(ensureMe);setSync();
+  backend=sb?supaBackend(sb,code):localBackend();
+  route();backend.start(()=>ensureMe());setSync();
 }
 (async()=>{
   renderHero();
   const C=window.TRIP_CONFIG||{};
   const configured=C.SUPABASE_URL&&!/PASTE_/.test(C.SUPABASE_URL)&&C.SUPABASE_ANON_KEY&&!/PASTE_/.test(C.SUPABASE_ANON_KEY);
   if(!configured||!window.supabase){startApp(null);return}
-  const sb=window.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  const sb=window.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+  const check=async code=>{const {data,error}=await sb.rpc('trip_code_ok',{p_trip:C.TRIP_ID,p_code:code});if(error)throw error;return data===true};
+  const showSignin=msg=>{showApp(false);$('#sync').textContent='Enter the passcode to see the trip.';$('#signout').hidden=true;const e=$('#si_err');e.textContent=msg||'';e.hidden=!msg};
   $('#signinform').addEventListener('submit',async ev=>{
-    ev.preventDefault();const email=$('#si_email').value.trim();const err=$('#si_err');err.hidden=true;
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Enter a full email address, like jess@gmail.com.';err.hidden=false;return}
-    const b=$('#si_btn');b.disabled=true;b.textContent='Sending…';
-    const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
-    b.disabled=false;b.textContent='Email me a sign-in code';
-    if(error){err.textContent=/rate/i.test(error.message)?'Sign-in emails are limited to a few per hour for the whole group. Please try again in about an hour.':'Couldn’t send the link. Check the email and try again.';err.hidden=false;return}
-    $('#si_to').textContent=email;$('#signinform').hidden=true;$('#si_sent').hidden=false;$('#si_code').value='';$('#si_verr').hidden=true;
+    ev.preventDefault();const code=$('#si_code').value.trim();const err=$('#si_err');err.hidden=true;
+    if(!code){err.textContent='Type the trip passcode.';err.hidden=false;return}
+    const b=$('#si_btn');b.disabled=true;b.textContent='Checking…';
+    let ok=false;try{ok=await check(code)}catch(e){b.disabled=false;b.textContent='Open the trip';err.textContent='Couldn’t reach the trip. Check your connection and try again.';err.hidden=false;return}
+    b.disabled=false;b.textContent='Open the trip';
+    if(!ok){err.textContent='That passcode isn’t right. Check the group text and try again.';err.hidden=false;return}
+    lsSet(CODE_KEY,code);startApp(sb,code);
   });
-  async function signInWith(raw){
-    const err=$('#si_verr');err.hidden=true;raw=(raw||'').trim();
-    if(!raw){err.textContent='Paste the sign-in link from the email first.';err.hidden=false;return}
-    const b=$('#si_vbtn');b.disabled=true;b.textContent='Signing in…';
-    let res;
-    try{
-      if(/^\d{6,10}$/.test(raw.replace(/\s/g,''))){
-        res=await sb.auth.verifyOtp({email:$('#si_email').value.trim(),token:raw.replace(/\s/g,''),type:'email'});
-      }else{
-        let u;try{u=new URL(raw)}catch(e){u=null}
-        const q=u?u.searchParams:new URLSearchParams('');
-        const h=u&&u.hash?new URLSearchParams(u.hash.slice(1)):new URLSearchParams('');
-        if(h.get('access_token')&&h.get('refresh_token')){
-          res=await sb.auth.setSession({access_token:h.get('access_token'),refresh_token:h.get('refresh_token')});
-        }else{
-          const th=q.get('token_hash')||q.get('token');
-          if(!th){b.disabled=false;b.textContent='Sign in';err.textContent='That doesn’t look like the sign-in link. Press and hold the Sign in link in the email and choose Copy Link.';err.hidden=false;return}
-          let type=(q.get('type')||'magiclink').toLowerCase();
-          if(!['signup','magiclink','email','invite','recovery','email_change'].includes(type))type='magiclink';
-          res=await sb.auth.verifyOtp({token_hash:th,type});
-        }
-      }
-    }catch(e){res={error:e}}
-    b.disabled=false;b.textContent='Sign in';
-    if(res&&res.error){err.textContent=/expired|invalid|used/i.test(res.error.message||'')?'That link has expired or was already used (tapping it uses it up). Tap “Use a different email” and send a new one, then copy it without tapping.':'Couldn’t sign in. Check your connection and try again.';err.hidden=false}
-  }
-  $('#si_sent').addEventListener('submit',ev=>{ev.preventDefault();signInWith($('#si_code').value)});
-  $('#si_paste').addEventListener('click',async()=>{
-    try{const t=await navigator.clipboard.readText();$('#si_code').value=t;signInWith(t)}
-    catch(e){$('#si_code').focus();const err=$('#si_verr');err.textContent='Tap in the box below, then press and hold and choose Paste.';err.hidden=false}
-  });
-  $('#si_again').addEventListener('click',()=>{$('#signinform').hidden=false;$('#si_sent').hidden=true});
-  $('#signout').addEventListener('click',async()=>{await sb.auth.signOut();location.hash='';location.reload()});
-  sb.auth.onAuthStateChange((evt,session)=>{if(session)startApp(sb,session.user.email)});
-  const {data:{session}}=await sb.auth.getSession();
-  if(session)startApp(sb,session.user.email);else showSignin();
+  $('#signout').addEventListener('click',()=>{if(meId()){lsSet(ME_KEY,'');ensureMe(true)}else ensureMe(true)});
+  const saved=lsGet(CODE_KEY);
+  if(saved){let ok=false;try{ok=await check(saved)}catch(e){ok=true}
+    if(ok){startApp(sb,saved);return}
+    lsSet(CODE_KEY,'');showSignin('The trip passcode changed. Enter the new one from the group text.');return}
+  showSignin();
 })();
 })();
 </script>
