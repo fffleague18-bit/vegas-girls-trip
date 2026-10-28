@@ -201,7 +201,7 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
     <form class="panel" id="signinform" novalidate>
       <h2>Join the trip</h2>
       <p class="sub" style="margin:0">Enter the trip passcode from the group text. You only do this once on each phone.</p>
-      <div class="f"><label for="si_code">Trip passcode</label><input id="si_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.12em;font-size:18px"></div>
+      <div class="f"><label for="si_code">Trip passcode</label><input id="si_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.12em;font-size:18px;text-transform:uppercase"></div>
       <button class="btn primary" type="submit" id="si_btn">Open the trip</button>
       <div class="err" id="si_err" hidden></div>
     </form>
@@ -823,7 +823,7 @@ function startApp(sb,code){
   const check=async code=>{const {data,error}=await sb.rpc('trip_code_ok',{p_trip:C.TRIP_ID,p_code:code});if(error)throw error;return data===true};
   const showSignin=msg=>{showApp(false);$('#sync').textContent='Enter the passcode to see the trip.';$('#signout').hidden=true;const e=$('#si_err');e.textContent=msg||'';e.hidden=!msg};
   $('#signinform').addEventListener('submit',async ev=>{
-    ev.preventDefault();const code=$('#si_code').value.trim();const err=$('#si_err');err.hidden=true;
+    ev.preventDefault();const code=$('#si_code').value.trim().toUpperCase();const err=$('#si_err');err.hidden=true;
     if(!code){err.textContent='Type the trip passcode.';err.hidden=false;return}
     const b=$('#si_btn');b.disabled=true;b.textContent='Checking…';
     let ok=false;try{ok=await check(code)}catch(e){b.disabled=false;b.textContent='Open the trip';err.textContent='Couldn’t reach the trip. Check your connection and try again.';err.hidden=false;return}
