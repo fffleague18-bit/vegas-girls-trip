@@ -199,16 +199,19 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
   <section class="signin" id="signin" hidden>
     <form class="panel" id="signinform" novalidate>
       <h2>Join the trip</h2>
-      <p class="sub" style="margin:0">Enter your email and we’ll send you a sign-in link. No password, no app to download.</p>
+      <p class="sub" style="margin:0">Enter your email and we’ll send you a sign-in code. No password, no app to download.</p>
       <div class="f"><label for="si_email">Your email</label><input type="email" id="si_email" autocomplete="email" inputmode="email" placeholder="you@example.com" required></div>
-      <button class="btn primary" type="submit" id="si_btn">Email me a sign-in link</button>
+      <button class="btn primary" type="submit" id="si_btn">Email me a sign-in code</button>
       <div class="err" id="si_err" hidden></div>
     </form>
-    <div class="panel" id="si_sent" hidden>
+    <form class="panel" id="si_sent" hidden novalidate>
       <h2>Check your email</h2>
-      <p style="margin:0">We sent a link to <b id="si_to"></b>. Open it on this phone or computer and you’re in. It can take a minute, so check spam too.</p>
+      <p style="margin:0">We emailed a code to <b id="si_to"></b>. Type it below. It can take a minute, so check spam too.</p>
+      <div class="f"><label for="si_code">Code from the email</label><input id="si_code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" style="font-family:var(--num);letter-spacing:.2em;font-size:20px"></div>
+      <button class="btn primary" type="submit" id="si_vbtn">Sign in</button>
+      <div class="err" id="si_verr" hidden></div>
       <button class="btn" type="button" id="si_again">Use a different email</button>
-    </div>
+    </form>
   </section>
   <nav class="tabs" id="tabs" aria-label="Sections" hidden></nav>
   <main id="main" hidden></main>
@@ -830,9 +833,18 @@ function startApp(sb,email){
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Enter a full email address, like jess@gmail.com.';err.hidden=false;return}
     const b=$('#si_btn');b.disabled=true;b.textContent='Sending…';
     const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
-    b.disabled=false;b.textContent='Email me a sign-in link';
+    b.disabled=false;b.textContent='Email me a sign-in code';
     if(error){err.textContent=/rate/i.test(error.message)?'Too many links sent. Wait a minute and try again.':'Couldn’t send the link. Check the email and try again.';err.hidden=false;return}
-    $('#si_to').textContent=email;$('#signinform').hidden=true;$('#si_sent').hidden=false;
+    $('#si_to').textContent=email;$('#signinform').hidden=true;$('#si_sent').hidden=false;$('#si_code').value='';$('#si_verr').hidden=true;setTimeout(()=>$('#si_code').focus(),50);
+  });
+  $('#si_sent').addEventListener('submit',async ev=>{
+    ev.preventDefault();const err=$('#si_verr');err.hidden=true;
+    const token=$('#si_code').value.replace(/\D/g,'');const email=$('#si_email').value.trim();
+    if(token.length<6){err.textContent='Enter the full code from the email.';err.hidden=false;return}
+    const b=$('#si_vbtn');b.disabled=true;b.textContent='Signing in…';
+    const {error}=await sb.auth.verifyOtp({email,token,type:'email'});
+    b.disabled=false;b.textContent='Sign in';
+    if(error){err.textContent=/expired|invalid/i.test(error.message)?'That code didn’t work or has expired. Check it, or go back and send a new one.':'Couldn’t sign in. Try again in a minute.';err.hidden=false}
   });
   $('#si_again').addEventListener('click',()=>{$('#signinform').hidden=false;$('#si_sent').hidden=true});
   $('#signout').addEventListener('click',async()=>{await sb.auth.signOut();location.hash='';location.reload()});
