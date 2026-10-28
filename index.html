@@ -187,6 +187,7 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .signin h2{font-size:20px}
 .signin input{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:11px 12px;font-size:16px;width:100%}
 .signin .btn{padding:11px 14px;font-size:15px}
+.steps{margin:0;padding-left:20px;display:grid;gap:4px}
 .userbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .linkbtn{border:0;background:none;color:var(--accent);font-weight:600;font-size:12px;cursor:pointer;padding:0}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(16px);opacity:.6}}}
@@ -206,9 +207,16 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
     </form>
     <form class="panel" id="si_sent" hidden novalidate>
       <h2>Check your email</h2>
-      <p style="margin:0">We emailed a code to <b id="si_to"></b>. Type it below. It can take a minute, so check spam too.</p>
-      <div class="f"><label for="si_code">Code from the email</label><input id="si_code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" style="font-family:var(--num);letter-spacing:.2em;font-size:20px"></div>
-      <button class="btn primary" type="submit" id="si_vbtn">Sign in</button>
+      <p style="margin:0">We emailed a sign-in link to <b id="si_to"></b>. It can take a minute, so check spam too.</p>
+      <ol class="steps" id="si_steps">
+        <li>In the email, <b>press and hold</b> the <b>Sign in</b> link (don’t tap it).</li>
+        <li>Choose <b>Copy Link</b>.</li>
+        <li>Come back here and tap <b>Paste link</b>.</li>
+      </ol>
+      <button class="btn primary" type="button" id="si_paste">Paste link</button>
+      <div class="f"><label for="si_code">Or paste it here yourself</label><input id="si_code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…supabase.co/auth/v1/verify…"></div>
+      <button class="btn" type="submit" id="si_vbtn">Sign in</button>
+      <p class="sub" style="margin:0">On a computer? You can just click the link in the email instead.</p>
       <div class="err" id="si_verr" hidden></div>
       <button class="btn" type="button" id="si_again">Use a different email</button>
     </form>
@@ -835,16 +843,38 @@ function startApp(sb,email){
     const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
     b.disabled=false;b.textContent='Email me a sign-in code';
     if(error){err.textContent=/rate/i.test(error.message)?'Too many links sent. Wait a minute and try again.':'Couldn’t send the link. Check the email and try again.';err.hidden=false;return}
-    $('#si_to').textContent=email;$('#signinform').hidden=true;$('#si_sent').hidden=false;$('#si_code').value='';$('#si_verr').hidden=true;setTimeout(()=>$('#si_code').focus(),50);
+    $('#si_to').textContent=email;$('#signinform').hidden=true;$('#si_sent').hidden=false;$('#si_code').value='';$('#si_verr').hidden=true;
   });
-  $('#si_sent').addEventListener('submit',async ev=>{
-    ev.preventDefault();const err=$('#si_verr');err.hidden=true;
-    const token=$('#si_code').value.replace(/\D/g,'');const email=$('#si_email').value.trim();
-    if(token.length<6){err.textContent='Enter the full code from the email.';err.hidden=false;return}
+  async function signInWith(raw){
+    const err=$('#si_verr');err.hidden=true;raw=(raw||'').trim();
+    if(!raw){err.textContent='Paste the sign-in link from the email first.';err.hidden=false;return}
     const b=$('#si_vbtn');b.disabled=true;b.textContent='Signing in…';
-    const {error}=await sb.auth.verifyOtp({email,token,type:'email'});
+    let res;
+    try{
+      if(/^\d{6,10}$/.test(raw.replace(/\s/g,''))){
+        res=await sb.auth.verifyOtp({email:$('#si_email').value.trim(),token:raw.replace(/\s/g,''),type:'email'});
+      }else{
+        let u;try{u=new URL(raw)}catch(e){u=null}
+        const q=u?u.searchParams:new URLSearchParams('');
+        const h=u&&u.hash?new URLSearchParams(u.hash.slice(1)):new URLSearchParams('');
+        if(h.get('access_token')&&h.get('refresh_token')){
+          res=await sb.auth.setSession({access_token:h.get('access_token'),refresh_token:h.get('refresh_token')});
+        }else{
+          const th=q.get('token_hash')||q.get('token');
+          if(!th){b.disabled=false;b.textContent='Sign in';err.textContent='That doesn’t look like the sign-in link. Press and hold the Sign in link in the email and choose Copy Link.';err.hidden=false;return}
+          let type=(q.get('type')||'magiclink').toLowerCase();
+          if(!['signup','magiclink','email','invite','recovery','email_change'].includes(type))type='magiclink';
+          res=await sb.auth.verifyOtp({token_hash:th,type});
+        }
+      }
+    }catch(e){res={error:e}}
     b.disabled=false;b.textContent='Sign in';
-    if(error){err.textContent=/expired|invalid/i.test(error.message)?'That code didn’t work or has expired. Check it, or go back and send a new one.':'Couldn’t sign in. Try again in a minute.';err.hidden=false}
+    if(res&&res.error){err.textContent=/expired|invalid|used/i.test(res.error.message||'')?'That link has expired or was already used (tapping it uses it up). Tap “Use a different email” and send a new one, then copy it without tapping.':'Couldn’t sign in. Check your connection and try again.';err.hidden=false}
+  }
+  $('#si_sent').addEventListener('submit',ev=>{ev.preventDefault();signInWith($('#si_code').value)});
+  $('#si_paste').addEventListener('click',async()=>{
+    try{const t=await navigator.clipboard.readText();$('#si_code').value=t;signInWith(t)}
+    catch(e){$('#si_code').focus();const err=$('#si_verr');err.textContent='Tap in the box below, then press and hold and choose Paste.';err.hidden=false}
   });
   $('#si_again').addEventListener('click',()=>{$('#signinform').hidden=false;$('#si_sent').hidden=true});
   $('#signout').addEventListener('click',async()=>{await sb.auth.signOut();location.hash='';location.reload()});
