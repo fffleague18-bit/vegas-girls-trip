@@ -613,11 +613,11 @@ function girlForm(id){
   openModal(id?'Edit '+(g.name||''):'Add a girl',`
     <div class="f"><label for="g_n">Name</label><input id="g_n" value="${esc(g.name)}" autocomplete="off"></div>
     <div class="two"><div class="f"><label for="g_p">Phone</label><input id="g_p" inputmode="tel" value="${esc(g.phone)}"></div><div class="f"><label for="g_v">Venmo / Zelle / Cash App</label><input id="g_v" value="${esc(g.payHandle)}" placeholder="@venmo-name"></div></div>
-    <div class="f"><label for="g_c">Cards she might use</label><input id="g_c" value="${esc(g.cards)}" placeholder="Chase Sapphire 4417, Amex Gold"><span class="hint">Separate with commas. Use a nickname or the last 4 digits only — never the full card number.</span></div>
+    <div class="f"><label for="g_c">Cards she might use</label><input id="g_c" value="${esc(g.cards)}" maxlength="120" placeholder="Amex 1005, Chase 4417"><span class="hint">Card name and the <b>last 4 digits only</b>. Separate cards with commas.</span></div>
     ${g.email?`<div class="hint">Signs in as ${esc(g.email)}</div>`:id?'':`<div class="hint">Girls who sign in add themselves. Use this only for someone who won’t be using the app.</div>`}`,
   {onSave:async()=>{
     const name=val('g_n');if(!name)return 'Add her name.';
-    if(/\d{12,}/.test(val('g_c').replace(/[\s-]/g,'')))return 'That looks like a full card number. Use only the last 4 digits.';
+    {const ce=cardErr(val('g_c'));if(ce)return ce;}
     const o={name,phone:val('g_p'),payHandle:val('g_v'),cards:val('g_c'),email:g.email||'',createdAt:g.createdAt||Date.now()};
     return write(()=>backend.save('girls',id||uid(),o));
   },onDelete:id?async()=>used?`${g.name} has expenses or payments. Remove those first so the math stays right.`:write(()=>backend.remove('girls',id)):null});
@@ -633,10 +633,10 @@ function ensureMe(force){
     ${gs.length?`<div class="f"><label for="w_who">I’m…</label><select id="w_who"><option value="">New here, add me</option>${gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></div>`:''}
     <div class="f"><label for="w_n">Your name</label><input id="w_n" autocomplete="given-name"></div>
     <div class="two"><div class="f"><label for="w_p">Phone</label><input id="w_p" inputmode="tel"></div><div class="f"><label for="w_v">Venmo / Zelle / Cash App</label><input id="w_v" placeholder="@venmo-name"></div></div>
-    <div class="f"><label for="w_c">Cards you might use</label><input id="w_c" placeholder="Amex Gold, Chase 4417"><span class="hint">Nickname or last 4 digits only.</span></div>`,
+    <div class="f"><label for="w_c">Cards you might use</label><input id="w_c" maxlength="120" placeholder="Amex 1005, Chase 4417"><span class="hint">Card name and the <b>last 4 digits only</b>. Never the full number.</span></div>`,
   {saveLabel:'That’s me',onSave:async()=>{
     const name=val('w_n');if(!name)return 'Add your name.';
-    if(/\d{12,}/.test(val('w_c').replace(/[\s-]/g,'')))return 'That looks like a full card number. Use only the last 4 digits.';
+    {const ce=cardErr(val('w_c'));if(ce)return ce;}
     const claim=val('w_who');const ex=claim?girl(claim)||{}:{};const id=claim||uid();
     const o={...ex,name,phone:val('w_p'),payHandle:val('w_v'),cards:val('w_c'),createdAt:ex.createdAt||Date.now()};delete o.id;
     const err=await write(()=>backend.save('girls',id,o));
@@ -648,6 +648,12 @@ function ensureMe(force){
   if(w)w.addEventListener('change',fill);
 }
 
+/* Cards: a name plus ONLY the last 4 digits. Blocks any run of 5+ digits (spaces/dashes ignored). */
+function cardErr(str){
+  const parts=String(str||'').split(',').map(x=>x.trim()).filter(Boolean);
+  for(const p of parts){const joined=p.replace(/(\d)[\s.-]+(?=\d)/g,'$1');if(/\d{5,}/.test(joined))return `“${p.length>24?p.slice(0,24)+'…':p}” has too many numbers. Use only the last 4 digits, like “Amex 1005”.`}
+  return '';
+}
 function cardList(gid){const g=girl(gid);return (g?.cards||'').split(',').map(s=>s.trim()).filter(Boolean)}
 function linkOptions(sel){
   const hs=[...S.hotels].sort((a,c)=>(a.name||'').localeCompare(c.name||''));
@@ -673,7 +679,7 @@ function expForm(id,preset={}){
       <div class="two"><div class="f"><label for="r_f">From</label><input id="r_f" value="${esc(e.ride?.from)}" placeholder="Harry Reid Airport"></div><div class="f"><label for="r_to">To</label><input id="r_to" value="${esc(e.ride?.to)}" placeholder="Hotel"></div></div>
     </div>
     <div class="two"><div class="f"><label for="e_pb">Who paid?</label><select id="e_pb">${girlOpts(e.paidBy||sortedGirls()[0].id)}</select></div>
-      <div class="f"><label for="e_card">Card used</label><input id="e_card" list="cardlist" value="${esc(e.card)}" placeholder="Card nickname or last 4"><datalist id="cardlist"></datalist><span class="hint">Type a new one anytime. It’s saved to her cards.</span></div></div>
+      <div class="f"><label for="e_card">Card used</label><input id="e_card" list="cardlist" value="${esc(e.card)}" maxlength="40" placeholder="Amex 1005"><datalist id="cardlist"></datalist><span class="hint">Card name and last 4 digits only. New cards are saved to her list.</span></div></div>
     <div class="f"><span class="lbl">Split between</span>
       <div class="seg" role="group"><button type="button" data-split="linked" id="seg_linked">Everyone in it</button><button type="button" data-split="equal">Pick girls</button><button type="button" data-split="custom">Custom amounts</button></div>
       <input type="hidden" id="e_sm" value="${mode0}">
@@ -684,7 +690,7 @@ function expForm(id,preset={}){
     const title=val('e_t'),amt=toCents(val('e_a'));
     if(!title)return 'Add a short description.';
     if(!(amt>0))return 'Enter the amount, like 84.50.';
-    if(/\d{12,}/.test(val('e_card').replace(/[\s-]/g,'')))return 'That looks like a full card number. Use a nickname or last 4 only.';
+    {const ce=cardErr(val('e_card'));if(ce)return ce;}
     const mode=val('e_sm');const link=val('e_for');
     const o={title,amountCents:amt,category:val('e_cat'),date:val('e_d'),paidBy:val('e_pb'),card:val('e_card'),notes:val('e_n'),splitMode:mode,createdAt:e.createdAt||Date.now()};
     if(link){const[t,i]=link.split(':');o.linkType=t;o.linkId=i}
