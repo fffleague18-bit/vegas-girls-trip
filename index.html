@@ -252,8 +252,9 @@ const dShort=s=>{const d=pd(s);return d?d.toLocaleDateString('en-US',{month:'sho
 const t12=t=>{if(!t)return'';const[h,m]=t.split(':').map(Number);return ((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?' am':' pm')};
 const girl=id=>S.girls.find(g=>g.id===id);
 const gname=id=>girl(id)?.name||'Someone';
-const sortedGirls=()=>[...S.girls].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
-const gidx=id=>Math.max(0,sortedGirls().findIndex(g=>g.id===id));
+const sortedGirls=()=>[...S.girls].sort((a,b)=>(a.name||'').localeCompare(b.name||'',undefined,{sensitivity:'base'})||(a.createdAt||0)-(b.createdAt||0));
+/* Avatar colors follow join order so a girl keeps her color when others are added. */
+const gidx=id=>Math.max(0,[...S.girls].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)).findIndex(g=>g.id===id));
 const initials=n=>(n||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
 const av=(id,cls='')=>`<span class="av ${cls}" style="background:var(--c${gidx(id)%8+1})" title="${esc(gname(id))}">${esc(initials(gname(id)))}</span>`;
 const catColor=c=>`var(--c${(CATS.indexOf(c)%8+8)%8+1})`;
