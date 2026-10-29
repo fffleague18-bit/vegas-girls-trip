@@ -212,6 +212,9 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .budgetbar{display:block;height:6px;border-radius:4px;background:var(--sunk);overflow:hidden;margin-top:4px;max-width:260px}
 .budgetbar span{display:block;height:100%;border-radius:4px}
 .depositme{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--accent-soft);border-color:transparent}
+.imin{border-color:var(--accent);color:var(--accent)}
+.imin.on{background:var(--accent);color:var(--accent-ink)}
+.receiptbox{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px}
 .archived{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
 .sharepanel{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .sharepanel .code{font-size:26px;font-weight:600;letter-spacing:.12em;margin:2px 0 4px;overflow-wrap:anywhere}
@@ -691,7 +694,7 @@ function tripDays(){
 }
 function vPlans(){
   const days=tripDays();const undated=S.plans.filter(p=>!p.date);
-  const head=`<div class="sec-head"><div><h2>Calendar</h2><div class="sub">Shows, dinners, reservations and rides, day by day.</div></div><button class="btn primary sm" data-act="plan-new">Add plan</button></div>`;
+  const head=`<div class="sec-head"><div><h2>Calendar</h2><div class="sub">Shows, dinners, reservations and rides, day by day. Tap <b>I’m in</b> on anything you want to join.</div></div><div class="btnrow"><button class="btn sm" data-act="template">Ideas from a template</button><button class="btn primary sm" data-act="plan-new">Add plan</button></div></div>`;
   if(!days.length&&!undated.length)return `<section class="sec">${head}<div class="empty"><b>Nothing planned yet</b><span>Add the show, the brunch reservation, the pool day. Set trip dates under Trip & girls to see every day laid out.</span><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn primary" data-act="plan-new">Add a plan</button><button class="btn" data-act="trip-edit">Set trip dates</button></div></div></section>`;
   const item=p=>`<div class="plan" data-act="plan-edit" data-id="${p.id}">
       <span class="time">${p.time?t12(p.time):'Any time'}</span>
@@ -700,7 +703,7 @@ function vPlans(){
         ${(p.going||[]).filter(girl).length?`<span class="small"><b>Going:</b> ${esc((p.going||[]).filter(girl).map(gname).sort((a,b)=>a.localeCompare(b)).join(', '))}</span>`:'<span class="small">Nobody marked as going yet</span>'}
         ${p.notes?`<span class="small">${esc(p.notes)}</span>`:''}</div>
       <div style="display:grid;gap:6px;justify-items:end"><span class="chip">${esc(p.kind||'Plan')}</span>${(p.going||[]).filter(girl).length?`<span class="stack">${(p.going||[]).filter(girl).map(id=>av(id,'xs')).join('')}</span>`:''}
-        <div class="btnrow"><button class="btn sm" data-act="plan-edit" data-id="${p.id}">Edit</button><button class="btn sm" data-act="plan-charge" data-id="${p.id}">Add cost</button></div></div>
+        <div class="btnrow">${meId()?((p.going||[]).includes(meId())?`<button class="btn sm imin on" data-act="rsvp" data-id="${p.id}" aria-pressed="true">✓ I’m in</button>`:`<button class="btn sm imin" data-act="rsvp" data-id="${p.id}" aria-pressed="false">I’m in?</button>`):''}<button class="btn sm" data-act="plan-edit" data-id="${p.id}">Edit</button><button class="btn sm" data-act="plan-charge" data-id="${p.id}">Add cost</button></div></div>
       ${linkedTotal('plan',p.id)?`<div class="plancharges">${chargeList('plan',p.id)}</div>`:''}
     </div>`;
   const stay=(h,kind)=>`<div class="plan" data-act="hotel-edit" data-id="${h.id}">
@@ -942,6 +945,13 @@ function vBudget(){
     ${myOwe?`<div class="panel depositme"><b>Your deposit: ${fmt(myOwe)}</b>${payButtons(me,bd.to,myOwe,'Splitzy deposit · '+(S.trip.name||'trip'))}<button class="btn sm" data-act="deposit-paid" data-id="${me}">I paid it</button></div>`:''}
     <div class="list">${rows}</div></section>`;
 }
+async function rsvp(pid){
+  const me=meId();const p=plan(pid);if(!me||!p)return;
+  const going=new Set(p.going||[]);const joining=!going.has(me);joining?going.add(me):going.delete(me);
+  const o={...p,going:sortedGirls().map(g=>g.id).filter(id=>going.has(id))};delete o.id;
+  const err=await write(()=>backend.save('plans',pid,o));
+  toast(err||(joining?'You’re in for '+p.title+'!':'You’re out of '+p.title));
+}
 async function markDeposit(gid){
   const bd=S.trip.budget||{};const amt=Math.max(0,(bd.deposit||0)-depositsPaid(gid));if(!amt||!bd.to)return;
   const err=await write(()=>backend.save('payments',uid(),{from:gid,to:bd.to,amountCents:amt,method:'Deposit',kind:'deposit',date:todayIso(),createdAt:Date.now()}));
@@ -1021,6 +1031,34 @@ function linkOptions(sel){
     (hs.length?`<optgroup label="Hotels">${hs.map(h=>`<option value="hotel:${h.id}" ${sel==='hotel:'+h.id?'selected':''}>${esc(h.name)}</option>`).join('')}</optgroup>`:'')+
     (ps.length?`<optgroup label="Activities">${ps.map(p=>`<option value="plan:${p.id}" ${sel==='plan:'+p.id?'selected':''}>${esc(p.title)}${p.date?' ('+dShort(p.date)+')':''}</option>`).join('')}</optgroup>`:'');
 }
+/* Receipt reading happens on the phone (Tesseract, loaded only when first used). Best effort: always double-check. */
+let tessLoading=null;
+function loadTesseract(){if(window.Tesseract)return Promise.resolve();if(tessLoading)return tessLoading;
+  tessLoading=new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';sc.onload=()=>res();sc.onerror=()=>{tessLoading=null;rej(new Error('load'))};document.head.appendChild(sc)});return tessLoading}
+function parseReceipt(text){
+  const lines=String(text||'').split(/\n+/).map(l=>l.trim()).filter(Boolean);
+  const money=l=>{const m=l.replace(/[Oo](?=\d)|(?<=\d)[Oo]/g,'0').match(/\$?\s*(\d{1,5}(?:,\d{3})*[.,]\d{2})(?!\d)/g);return m?m.map(x=>parseFloat(x.replace(/[$\s]/g,'').replace(/,(?=\d{3})/g,'').replace(',','.'))):[]};
+  let total=null;
+  for(let i=lines.length-1;i>=0&&total===null;i--){const l=lines[i];if(/total|amount due|balance due|grand/i.test(l)&&!/sub\s*-?\s*total/i.test(l)){const m=money(l);if(m.length)total=m[m.length-1]}}
+  if(total===null){const all=lines.flatMap(money);if(all.length)total=Math.max(...all)}
+  const merchant=(lines.find(l=>/[A-Za-z]{3,}/.test(l)&&!/receipt|welcome|thank|order|table|server|guest/i.test(l))||'').replace(/[^\w&'’ .-]/g,'').trim().slice(0,40);
+  let date='';const dm=String(text).match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if(dm){let [_,m,d,y]=dm;y=+y<100?2000+ +y:+y;if(+m>=1&&+m<=12&&+d>=1&&+d<=31)date=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`}
+  return {total,merchant,date};
+}
+async function scanReceipt(file){
+  const st=$('#rc_status');st.hidden=false;st.textContent='Reading the receipt… (the first time takes a little longer)';
+  try{await loadTesseract()}catch(e){st.textContent='Couldn’t load the receipt reader. Check your connection, or type the amount.';return}
+  try{
+    const img=await shrinkImage(file);
+    const {data}=await window.Tesseract.recognize(img,'eng');
+    const r=parseReceipt(data&&data.text);
+    if(r.total){$('#e_a').value=r.total.toFixed(2);$('#e_a').dispatchEvent(new Event('input',{bubbles:true}))}
+    if(r.merchant&&!val('e_t'))$('#e_t').value=r.merchant;
+    if(r.date)$('#e_d').value=r.date;
+    st.textContent=r.total?`Found ${fmt(Math.round(r.total*100))}${r.merchant?' at '+r.merchant:''}. Please double-check it, and add the tip if it isn’t on the receipt.`:'Couldn’t find a total on that photo. Try a closer, flatter shot, or type it in.';
+  }catch(e){st.textContent='Couldn’t read that photo. Try again, or type the amount.'}
+}
 function expForm(id,preset={}){
   if(!S.girls.length){girlForm();return}
   const e=id?S.expenses.find(x=>x.id===id):{category:'Food',date:todayIso(),splitMode:'equal',splitAmong:S.girls.map(g=>g.id),paidBy:meId()||undefined,...preset};
@@ -1029,6 +1067,7 @@ function expForm(id,preset={}){
   const link0=e.linkType&&e.linkId?e.linkType+':'+e.linkId:'';
   const mode0=e.splitMode==='custom'?'custom':e.splitMode==='linked'&&link0?'linked':'equal';
   openModal(id?'Edit expense':preset.category==='Ride share'?'Add a ride':'Add expense',`
+    ${id?'':`<div class="f receiptbox"><label class="btn sm" for="rc_file">📷 Snap a receipt</label><input type="file" id="rc_file" accept="image/*" capture="environment" hidden><span class="hint" id="rc_status" hidden></span></div>`}
     <div class="f"><label for="e_for">Part of a hotel or activity?</label><select id="e_for">${linkOptions(link0)}</select><span class="hint">Pick one and the cost splits only between the girls staying there or going.</span></div>
     <div class="two"><div class="f"><label for="e_t">Description</label><input id="e_t" value="${esc(e.title)}" placeholder="${preset.category==='Ride share'?'Uber to the Strip':'Dinner at Nobu'}"></div>
       <div class="f"><label for="e_a">Amount (with tip & tax)</label><input id="e_a" inputmode="decimal" value="${e.amountCents?(e.amountCents/100).toFixed(2):''}" placeholder="0.00"></div></div>
@@ -1087,6 +1126,7 @@ function expForm(id,preset={}){
     hint();
   }
   syncCards();setMode(mode0);
+  {const rf=document.getElementById('rc_file');if(rf)rf.addEventListener('change',()=>{const f=rf.files&&rf.files[0];if(f)scanReceipt(f);rf.value=''})}
   $('#e_pb').addEventListener('change',()=>{$('#e_card').value='';syncCards()});
   $('#e_cat').addEventListener('change',()=>$('#ridebox').hidden=!isRide());
   $('#e_for').addEventListener('change',()=>{
@@ -1152,6 +1192,8 @@ document.addEventListener('click',async ev=>{
   if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
   if(readOnly&&!['copy','filter','pay-new','pay-edit','zelle','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
+  if(a==='rsvp'){rsvp(id);return}
+  if(a==='template'){templateForm();return}
   if(a==='budget-edit'){budgetForm();return}
   if(a==='deposit-paid'){markDeposit(id);return}
   if(a==='zelle'){zelleCopy(t.dataset.to,t.dataset.amt);return}
@@ -1204,7 +1246,9 @@ function startApp(sb,tr){
   if(started)return;started=true;
   backend=sb?supaBackend(sb,tr.id,tr.code):localBackend();
   if(tr){const c=bannerCacheGet(tr.id);if(c&&c.img){BANNER=c.img;bannerAt=c.at}}
-  route();backend.start(()=>ensureMe());setSync();
+  route();backend.start(async()=>{ensureMe();
+    if(S.trip.template&&!S.trip.templateDone&&backend.shared){const k=S.trip.template;await write(()=>backend.save('trip','main',{...S.trip,templateDone:true}));await applyTemplate(k)}
+  });setSync();
 }
 function openTrip(id){lsSet(ACTIVE_KEY,id);location.hash='';location.reload()}
 function goHome(){lsSet(ACTIVE_KEY,'');location.hash='';location.reload()}
@@ -1310,10 +1354,31 @@ function joinForm(msg){
   }});
 }
 function suggestCode(name){const w=(String(name||'').toUpperCase().match(/[A-Z]+/g)||['TRIP']).filter(x=>!['THE','GIRLS','GIRL','TRIP','A','OF'].includes(x))[0]||'TRIP';return w.slice(0,8)+(1000+Math.floor(Math.random()*9000))}
+const TEMPLATES={
+  vegas:{name:'Vegas weekend',items:[['Pool day at a day club','Pool party','about $50 cover'],['Big show night','Show','about $120'],['Fancy dinner on the Strip','Dinner','about $90'],['Brunch buffet','Brunch','about $60'],['Nightclub','Club','about $50 cover'],['Spa morning','Spa','about $150'],['Fremont Street night','Other','free'],['Slots & cocktails','Drinks','you decide']]},
+  nashville:{name:'Nashville girls trip',items:[['Honky-tonk crawl on Broadway','Bar','free, drinks extra'],['Pedal tavern ride','Tour','about $45'],['Hot chicken lunch','Lunch','about $20'],['Opry or live music show','Show','about $80'],['Boozy brunch','Brunch','about $35'],['Line dancing lesson','Other','about $20']]},
+  pool:{name:'Scottsdale / pool weekend',items:[['Pool cabana day','Pool party','about $75'],['Spa day','Spa','about $150'],['Sunset hike','Other','free'],['Old Town bar hop','Bar','about $40'],['Brunch','Brunch','about $35'],['Topgolf','Other','about $40']]},
+  bach:{name:'Bachelorette weekend',items:[['Welcome dinner','Dinner','about $60'],['Matching outfits & sashes','Shopping','about $25'],['Pool party or day club','Pool party','about $50'],['Boat or party bus','Tour','about $80'],['Dance or cocktail class','Other','about $40'],['Recovery brunch','Brunch','about $35']]},
+  beach:{name:'Beach getaway',items:[['Beach day setup','Other','about $30'],['Boat tour or snorkel','Tour','about $90'],['Seafood dinner','Dinner','about $60'],['Sunset drinks','Drinks','about $30'],['Massage','Spa','about $120'],['Souvenir shopping','Shopping','you decide']]},
+  bday:{name:'Birthday weekend',items:[['Birthday dinner','Dinner','about $70'],['Cake & decorations','Other','about $15'],['Night out','Club','about $50'],['Nails or spa','Spa','about $60'],['Brunch','Brunch','about $35']]}
+};
+async function applyTemplate(key){
+  const tp=TEMPLATES[key];if(!tp)return;
+  const have=new Set(S.plans.map(p=>(p.title||'').toLowerCase()));let n=0;
+  for(const [title,kind,cost] of tp.items){if(have.has(title.toLowerCase()))continue;
+    const err=await write(()=>backend.save('plans',uid(),{title,kind,cost,date:'',going:[],fromTemplate:key,notes:'Idea from the '+tp.name+' template. Tap I’m in if you want to go.',createdAt:Date.now()+n}));if(err){toast(err);return}n++}
+  toast(n?`Added ${n} ideas to the Calendar`:'Those ideas are already on the Calendar');
+}
+function templateForm(){
+  openModal('Add ideas from a template',`<p class="sub" style="margin:0">Adds trip ideas to the Calendar under “Ideas, no date yet.” Costs are rough guesses per person. Everyone taps <b>I’m in</b> on what they want to do.</p>
+    <div class="f"><label for="tp_k">Template</label><select id="tp_k">${opts(Object.entries(TEMPLATES).map(([k,v])=>[k,v.name]),'vegas')}</select></div>`,
+  {saveLabel:'Add ideas',onSave:async()=>{const k=val('tp_k');setTimeout(()=>applyTemplate(k),30);return null}});
+}
 function newTripForm(){
   openModal('Start a new trip',`
     <div class="f"><label for="n_name">Trip name</label><input id="n_name" placeholder="Nashville Birthday Weekend"></div>
     <div class="f"><label for="n_dest">Where</label><input id="n_dest" placeholder="Nashville, Tennessee"></div>
+    <div class="f"><label for="n_tp">Start from a template</label><select id="n_tp">${opts([['','Blank trip'],...Object.entries(TEMPLATES).map(([k,v])=>[k,v.name])],'')}</select><span class="hint">Adds activity ideas the girls can say “I’m in” to.</span></div>
     <div class="two"><div class="f"><label for="n_s">First day</label><input type="date" id="n_s"></div><div class="f"><label for="n_e">Last day</label><input type="date" id="n_e"></div></div>
     ${bannerField('nb','')}
     <div class="f"><label for="n_org">Organizer code</label><input id="n_org" type="password" autocomplete="off" value="${esc(lsGet('tripbook-org'))}"><span class="hint">Only the owner and organizers can start trips. Ask Pennie if you need one. This phone remembers it after the first time.</span></div>
@@ -1325,7 +1390,7 @@ function newTripForm(){
     const code=val('n_code').toUpperCase().replace(/\s+/g,'');if(code.length<8||!/\d/.test(code))return 'Make the passcode at least 8 characters with at least one number.';
     const id='trip-'+uid().toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,36);
     const nimg=val('nb_img')&&val('nb_img')!=='CLEAR'?val('nb_img'):'';
-    const data={name,destination:val('n_dest'),startDate:val('n_s'),endDate:val('n_e'),...(nimg?{bannerAt:String(Date.now())}:{})};
+    const data={name,destination:val('n_dest'),startDate:val('n_s'),endDate:val('n_e'),...(nimg?{bannerAt:String(Date.now())}:{}),...(val('n_tp')?{template:val('n_tp')}:{})};
     let r;try{const res=await SB.rpc('trip_create',{p_trip:id,p_code:code,p_data:data,p_org:org});if(res.error)throw res.error;r=res.data}
     catch(e){return tooMany(e)?LOCKED:'Couldn’t create the trip. Check your connection and try again.'}
     if(r==='not-organizer')return 'That organizer code isn’t right. Only trip organizers can start a new trip.';
