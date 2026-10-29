@@ -203,6 +203,9 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .bannerprev{height:96px;border-radius:12px;border:1px dashed var(--line);background:var(--sunk) center/cover no-repeat;display:grid;place-items:center}
 .gamb{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 14px}
 .row-amt.pos,.tile .v.pos{color:var(--pos)}
+.treatchip{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.nights{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.nights input{width:52px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:4px 6px;font-size:14px}
 .archived{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
 .sharepanel{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .sharepanel .code{font-size:26px;font-weight:600;letter-spacing:.12em;margin:2px 0 4px;overflow-wrap:anywhere}
@@ -313,15 +316,37 @@ function linkName(e){
   if(e.linkType==='plan')return plan(e.linkId)?.title||'';
   return '';
 }
+/* Split cents by weights; leftover cents go one each to the first girls so totals always match. */
+function splitWeighted(amount,ids,w){
+  const out={};const tw=ids.reduce((t,id)=>t+w(id),0);if(!tw)return out;
+  let used=0;const raw=ids.map(id=>{const v=Math.floor(amount*w(id)/tw);used+=v;return [id,v]});
+  let rem=amount-used;raw.forEach(([id,v])=>{out[id]=v+(rem>0&&w(id)>0?1:0);if(rem>0&&w(id)>0)rem--});
+  return out;
+}
+const TREAT_LABELS=['Bride','Birthday girl','Bachelorette','Bride-to-be','Mom-to-be','Graduate','Guest of honor','Newly single','Retiree','Promotion queen'];
+const treats=()=>(S.trip.treats||[]).filter(t=>girl(t.girl));
+const treatOf=id=>treats().find(t=>t.girl===id);
+/* Is girl `id` being treated on expense e? Expense choice wins; otherwise the treat's default. */
+function treatedOn(e,id){const t=treatOf(id);if(!t)return false;if(e.treat&&id in e.treat)return !!e.treat[id];return t.scope!=='pick'}
+function hotelNights(h){const a=pd(h.checkIn),b=pd(h.checkOut);return a&&b&&b>a?Math.round((b-a)/864e5):0}
+function nightsFor(h,id){const full=hotelNights(h);const n=h.nights&&h.nights[id];return n>0?n:(full||1)}
 function shares(e){
-  const out={};
+  let out={};
   if(e.splitMode==='custom'){for(const k in (e.custom||{}))if(e.custom[k])out[k]=e.custom[k];return out}
   let among=e.splitAmong||[];
   if(e.splitMode==='linked'){const m=members(e);if(m&&m.filter(girl).length)among=m}
   const ids=sortedGirls().map(g=>g.id).filter(id=>among.includes(id));
   if(!ids.length)return out;
-  const base=Math.floor(e.amountCents/ids.length);let rem=e.amountCents-base*ids.length;
-  ids.forEach(id=>{out[id]=base+(rem>0?1:0);if(rem>0)rem--});
+  const h=e.splitMode==='linked'&&e.linkType==='hotel'?hotel(e.linkId):null;
+  out=h?splitWeighted(e.amountCents,ids,id=>nightsFor(h,id)):splitWeighted(e.amountCents,ids,()=>1);
+  /* Treats: a treated girl's share is spread over the others included (weighted the same way). */
+  const treated=ids.filter(id=>treatedOn(e,id)),payers=ids.filter(id=>!treatedOn(e,id));
+  if(treated.length&&payers.length){
+    const pool=treated.reduce((t,id)=>t+out[id],0);treated.forEach(id=>out[id]=0);
+    const add=h?splitWeighted(pool,payers,id=>nightsFor(h,id)):splitWeighted(pool,payers,()=>1);
+    payers.forEach(id=>out[id]+=add[id]||0);
+    treated.forEach(id=>delete out[id]);
+  }
   return out;
 }
 function balances(){
@@ -594,7 +619,8 @@ function vTrip(){
         ${h.rooms?`<dt>Rooms</dt><dd>${esc(h.rooms)}</dd>`:''}
         ${h.wifi?`<dt>Wi-Fi</dt><dd>${esc(h.wifi)}</dd>`:''}
         <dt>Staying here</dt><dd class="who">${whoList(h.guests)}</dd>
-        <dt>Hotel charges</dt><dd><span class="num">${fmt(tot)}</span>${tot&&n?` <span class="small">· about <span class="num">${fmt(Math.round(tot/n))}</span> each</span>`:''}</dd>
+        ${hotelNights(h)&&(h.guests||[]).some(id=>h.nights&&h.nights[id]>0&&h.nights[id]<hotelNights(h))?`<dt>Nights</dt><dd class="small">${esc((h.guests||[]).filter(girl).map(id=>gname(id).split(' ')[0]+' '+nightsFor(h,id)+' of '+hotelNights(h)).join(' · '))}</dd>`:''}
+        <dt>Hotel charges</dt><dd><span class="num">${fmt(tot)}</span>${tot&&n&&!(h.nights&&Object.keys(h.nights).length)?` <span class="small">· about <span class="num">${fmt(Math.round(tot/n))}</span> each</span>`:tot?' <span class="small">· split by nights stayed</span>':''}</dd>
       </dl>
       ${chargeList('hotel',h.id)}
       <div><button class="btn primary sm" data-act="hotel-charge" data-id="${h.id}">Add a charge for this hotel</button></div>
@@ -602,7 +628,7 @@ function vTrip(){
   const girls=S.girls.length?`<div class="girls">${sortedGirls().map(g=>{
     const hs=S.hotels.filter(h=>(h.guests||[]).includes(g.id)).map(h=>h.name);
     return `<button class="girl" data-act="girl-edit" data-id="${g.id}">
-      <div class="girl-top">${av(g.id)}<div><div class="girl-name">${esc(g.name)}${g.id===me?' <span class="chip">You</span>':''}</div><div class="small">${esc([g.phone,g.payHandle].filter(Boolean).join(' · ')||'Tap to add phone & Venmo')}</div></div></div>
+      <div class="girl-top">${av(g.id)}<div><div class="girl-name">${esc(g.name)}${g.id===me?' <span class="chip">You</span>':''}${treatOf(g.id)?` <span class="chip treatchip">🎉 ${esc(treatOf(g.id).label)}</span>`:''}</div><div class="small">${esc([g.phone,g.payHandle].filter(Boolean).join(' · ')||'Tap to add phone & Venmo')}</div></div></div>
       ${hs.length?`<div class="small">Staying at ${esc(hs.join(', '))}</div>`:''}
       ${(g.cards||'').trim()?`<div class="chips">${g.cards.split(',').map(c=>c.trim()).filter(Boolean).map(c=>`<span class="chip">${esc(c)}</span>`).join('')}</div>`:''}
       <div class="small">Paid so far <span class="num">${fmt(b[g.id]?.paid)}</span></div>
@@ -615,6 +641,9 @@ function vTrip(){
     </div></section>`:'';
   return `${share}
   <section class="sec"><div class="sec-head"><div><h2>The girls</h2><div class="sub">Everyone shows up here when they join.</div></div>${S.girls.length?'<button class="btn sm" data-act="girl-new">Add girl</button>':''}</div>${girls}</section>
+  ${S.girls.length?`<section class="sec"><div class="sec-head"><div><h2>Treating someone</h2><div class="sub">Her share is split among everyone else.</div></div><button class="btn sm" data-act="treat-new">🎉 Treat someone</button></div>
+    ${treats().length?`<div class="list">${treats().map(t=>`<div class="row" data-act="treat-edit" data-id="${t.girl}"><div class="row-main"><span class="row-title">🎉 Treat the ${esc(t.label.toLowerCase())}: ${esc(gname(t.girl))}</span><span class="small">${t.scope==='pick'?'Only on expenses you pick':'On every shared expense she’s in'} · she pays <span class="num">${fmt(S.expenses.reduce((x,e)=>x+(shares(e)[t.girl]||0),0))}</span></span></div><span class="row-amt"><span class="editlink">Edit</span></span></div>`).join('')}</div>`:`<div class="sub">Bride, birthday girl, mom-to-be? Treat her and the app splits her part among the rest of you.</div>`}
+  </section>`:''}
   <section class="sec"><div class="sec-head"><div><h2>Hotels</h2><div class="sub">Hotel costs split only between the girls staying there.</div></div>${S.hotels.length?'<button class="btn primary sm" data-act="hotel-new">Add hotel</button>':''}</div>${hotels}</section>
   <section class="sec"><div class="sec-head"><h2>Trip details</h2><button class="btn sm" data-act="trip-edit">Edit</button></div>
     ${t.startedBy?`<div class="sub">Trip started by ${esc(t.startedBy==='Owner'?'Pennie (owner)':t.startedBy)}</div>`:''}
@@ -672,7 +701,7 @@ function expRow(e){
   const split=e.splitMode==='linked'&&ln?`split ${n} way${n===1?'':'s'} · ${ln}`:e.splitMode==='custom'?'custom split':n===S.girls.length&&n>1?'split with everyone':n===1?'for '+gname(Object.keys(shares(e))[0]):`split ${n} ways`;
   return `<div class="row" data-act="exp-edit" data-id="${e.id}">
     <div class="row-main"><span class="row-title">${esc(e.title)}</span>
-      <span class="small"><span class="chip"><span class="dot" style="background:${catColor(e.category)}"></span>${esc(e.category)}</span> Paid by <b>${esc(gname(e.paidBy))}</b>${e.card?' · '+esc(e.card):''}</span></div>
+      <span class="small"><span class="chip"><span class="dot" style="background:${catColor(e.category)}"></span>${esc(e.category)}</span> Paid by <b>${esc(gname(e.paidBy))}</b>${e.card?' · '+esc(e.card):''}${(()=>{const inc=e.splitMode==='custom'?[]:(e.splitMode==='linked'&&members(e)?members(e):(e.splitAmong||[]));const tr=treats().filter(t=>inc.includes(t.girl)&&treatedOn(e,t.girl));return tr.length?' · 🎉 treating '+esc(tr.map(t=>gname(t.girl).split(' ')[0]).join(', ')):''})()}</span></div>
     <span class="row-amt">${fmt(e.amountCents)}<small>${esc(split)}</small><span class="editlink">Edit</span></span></div>`;
 }
 function vExpenses(){
@@ -783,7 +812,9 @@ function hotelForm(id){
   const linked=id?S.expenses.filter(e=>e.linkType==='hotel'&&e.linkId===id).length:0;
   openModal(id?'Edit '+(h.name||'hotel'):'Add a hotel',`
     <div class="f"><label for="h_n">Hotel</label><input id="h_n" value="${esc(h.name)}" placeholder="e.g. Bellagio"></div>
-    ${S.girls.length?`<div class="f"><div class="lblrow"><span class="lbl">Who’s staying here</span>${guestChecks('hg_',h.guests).split('<div class="checks">')[0]}</div><div class="checks">${guestChecks('hg_',h.guests).split('<div class="checks">')[1]}<span class="hint">Room charges linked to this hotel split only between the girls checked here. Change it any time and the math updates.</span></div>`:''}
+    ${S.girls.length?`<div class="f"><div class="lblrow"><span class="lbl">Who’s staying here</span><span class="quick"><button type="button" class="linkbtn" data-checkall="hg_" data-on="1">All</button><button type="button" class="linkbtn" data-checkall="hg_" data-on="">None</button></span></div>
+      <div class="checks">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="hg_${g.id}" ${(h.guests||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><span class="nights"><input type="number" min="1" max="60" inputmode="numeric" id="hn_${g.id}" value="${h.nights&&h.nights[g.id]>0?h.nights[g.id]:''}" placeholder="all" aria-label="${esc(g.name)} nights"> nights</span></label>`).join('')}</div>
+      <span class="hint">Room charges split only between the girls checked. Leave nights as “all” for the whole stay; if someone arrives late or leaves early, type her nights and the room splits by nights stayed.</span></div>`:''}
     <div class="f"><label for="h_a">Address</label><input id="h_a" value="${esc(h.address)}"></div>
     <div class="two"><div class="f"><label for="h_p">Phone</label><input id="h_p" inputmode="tel" value="${esc(h.phone)}"></div><div class="f"><label for="h_c">Confirmation #</label><input id="h_c" value="${esc(h.confirmation)}"></div></div>
     <div class="f"><label for="h_bu">Booked under</label><input id="h_bu" value="${esc(h.bookedUnder)}" placeholder="Whose name is on the reservation"></div>
@@ -794,7 +825,8 @@ function hotelForm(id){
   {onSave:async()=>{
     const name=val('h_n');if(!name)return 'Add the hotel name.';
     if(val('h_ci')&&val('h_co')&&val('h_co')<val('h_ci'))return 'Check-out comes before check-in.';
-    const o={name,guests:checkedIds('hg_'),address:val('h_a'),phone:val('h_p'),confirmation:val('h_c'),bookedUnder:val('h_bu'),checkIn:val('h_ci'),checkInTime:val('h_cit'),checkOut:val('h_co'),checkOutTime:val('h_cot'),rooms:val('h_r'),wifi:val('h_w'),createdAt:h.createdAt||Date.now()};
+    const nights={};checkedIds('hg_').forEach(gid=>{const n=parseInt(val('hn_'+gid),10);if(n>0)nights[gid]=n});
+    const o={name,guests:checkedIds('hg_'),nights,address:val('h_a'),phone:val('h_p'),confirmation:val('h_c'),bookedUnder:val('h_bu'),checkIn:val('h_ci'),checkInTime:val('h_cit'),checkOut:val('h_co'),checkOutTime:val('h_cot'),rooms:val('h_r'),wifi:val('h_w'),createdAt:h.createdAt||Date.now()};
     return write(()=>backend.save('hotels',id||uid(),o));
   },onDelete:id?async()=>linked?`${linked} charge${linked===1?' is':'s are'} linked to this hotel. Delete those or change what they’re for first.`:write(()=>backend.remove('hotels',id)):null});
 }
@@ -830,6 +862,26 @@ function breakdown(id){
     ${paidFor.length?`<div class="f"><span class="lbl">She paid for</span><div class="list">${paidFor.map(e=>`<div class="row" style="cursor:default"><div class="row-main"><span class="row-title">${esc(e.title)}</span><span class="small">${esc([e.date&&dShort(e.date),e.card].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(e.amountCents)}</span></div>`).join('')}</div></div>`:''}`,
   {saveLabel:'Done',onSave:async()=>null});
   const c=$('#mcancel');if(c)c.hidden=true;
+}
+function treatForm(gid){
+  const cur=gid?treatOf(gid):null;const isOther=cur&&!TREAT_LABELS.includes(cur.label);
+  openModal(cur?'Edit treat':'🎉 Treat someone',`
+    <div class="f"><label for="tr_g">Who are we treating?</label><select id="tr_g">${girlOpts(cur?cur.girl:'')}</select></div>
+    <div class="f"><label for="tr_l">Treat the…</label><select id="tr_l">${opts([...TREAT_LABELS,['__other','Something else (type it)']],isOther?'__other':(cur?cur.label:'Bride'))}</select>
+      <input id="tr_o" placeholder="Queen of the weekend" value="${esc(isOther?cur.label:'')}" ${isOther?'':'hidden'} maxlength="30" style="margin-top:6px"></div>
+    <div class="f"><span class="lbl">On which expenses?</span>
+      <label class="check"><input type="radio" name="tr_s" id="tr_all" ${!cur||cur.scope!=='pick'?'checked':''}><span>Every shared expense she’s part of</span><span></span></label>
+      <label class="check"><input type="radio" name="tr_s" id="tr_pick" ${cur&&cur.scope==='pick'?'checked':''}><span>Only the ones we pick (tick “Treat” on each expense)</span><span></span></label>
+      <span class="hint">You can always switch the treat on or off on any single expense.</span></div>`,
+  {saveLabel:cur?'Save':'Treat her',onSave:async()=>{
+    const g=val('tr_g');let label=val('tr_l')==='__other'?val('tr_o'):val('tr_l');if(!label)return 'Type what we’re treating her for.';
+    const list=(S.trip.treats||[]).filter(t=>t.girl!==g&&(!cur||t.girl!==cur.girl));
+    list.push({girl:g,label,scope:$('#tr_pick').checked?'pick':'all'});
+    const err=await write(()=>backend.save('trip','main',{...S.trip,treats:list}));
+    if(!err)setTimeout(()=>toast('🎉 Treating '+gname(g).split(' ')[0]+'!'),50);
+    return err;
+  },onDelete:cur?async()=>write(()=>backend.save('trip','main',{...S.trip,treats:(S.trip.treats||[]).filter(t=>t.girl!==cur.girl)})):null});
+  $('#tr_l').addEventListener('change',()=>{const o=$('#tr_o');o.hidden=val('tr_l')!=='__other';if(!o.hidden)o.focus()});
 }
 function endTripForm(){
   const owed=transfers(balances());
@@ -921,6 +973,7 @@ function expForm(id,preset={}){
       <input type="hidden" id="e_sm" value="${mode0}">
       <div class="checks" id="splitbox">${sortedGirls().map(g=>`<label class="check"><input type="checkbox" id="sp_${g.id}" ${e.splitMode==='custom'?(custom[g.id]?'checked':''):(e.splitAmong||[]).includes(g.id)?'checked':''}><span>${esc(g.name)}</span><input type="number" step="0.01" min="0" inputmode="decimal" id="cu_${g.id}" value="${custom[g.id]?(custom[g.id]/100).toFixed(2):''}" hidden aria-label="${esc(g.name)} amount"></label>`).join('')}</div>
       <span class="hint" id="splithint"></span></div>
+    ${treats().length?`<div class="f"><span class="lbl">🎉 Treats</span>${treats().map(t=>`<label class="check"><input type="checkbox" id="tt_${t.girl}" ${treatedOn(e,t.girl)?'checked':''}><span>Treat the ${esc(t.label.toLowerCase())} (${esc(gname(t.girl).split(' ')[0])}) on this one</span><span></span></label>`).join('')}<span class="hint">If she’s included, her part is split among everyone else.</span></div>`:''}
     <div class="f"><label for="e_n">Notes</label><input id="e_n" value="${esc(e.notes)}" placeholder="Optional"></div>`,
   {onSave:async()=>{
     const title=val('e_t'),amt=toCents(val('e_a'));
@@ -930,6 +983,7 @@ function expForm(id,preset={}){
     const mode=val('e_sm');const link=val('e_for');
     const o={title,amountCents:amt,category:val('e_cat'),date:val('e_d'),paidBy:val('e_pb'),card:val('e_card'),notes:val('e_n'),splitMode:mode,createdAt:e.createdAt||Date.now()};
     if(link){const[t,i]=link.split(':');o.linkType=t;o.linkId=i}
+    if(treats().length){o.treat={};treats().forEach(t=>{o.treat[t.girl]=!!document.getElementById('tt_'+t.girl)?.checked})}
     if(mode==='custom'){const c={};let sum=0;sortedGirls().forEach(g=>{const v=toCents(val('cu_'+g.id)||'0');if(document.getElementById('sp_'+g.id).checked&&v>0){c[g.id]=v;sum+=v}});
       if(!sum)return 'Enter how much each girl owes.';
       if(sum!==amt)return `Custom amounts add up to ${fmt(sum)} but the expense is ${fmt(amt)}.`;
@@ -948,8 +1002,10 @@ function expForm(id,preset={}){
   const hint=()=>{const amt=toCents(val('e_a'))||0;const m=val('e_sm');
     if(m==='custom'){let sum=0;sortedGirls().forEach(g=>{if(document.getElementById('sp_'+g.id).checked)sum+=toCents(val('cu_'+g.id)||'0')||0});const left=amt-sum;$('#splithint').textContent=left===0?'Adds up.':left>0?`${fmt(left)} left to assign`:`${fmt(-left)} too much`}
     else if(m==='linked'){const n=(curMembers()||[]).filter(girl).length;const where=(val('e_for').startsWith('hotel')?'staying at ':'going to ')+curName();
-      $('#splithint').textContent=n?`${amt?fmt(Math.floor(amt/n))+' each, ':''}split between the ${n} girl${n===1?'':'s'} ${where}. If that list changes later, this updates automatically.`:`Nobody is marked as ${where} yet.`}
-    else{const n=checkedIds('sp_').length;$('#splithint').textContent=n&&amt?`${fmt(Math.floor(amt/n))} each, ${n} way${n===1?'':'s'}`:''}};
+      const tr=(curMembers()||[]).filter(g=>document.getElementById('tt_'+g)?.checked);const isH=val('e_for').startsWith('hotel');const hh=isH?hotel(val('e_for').split(':')[1]):null;const byN=hh&&hh.nights&&Object.keys(hh.nights).length;
+      $('#splithint').textContent=n?`${amt&&!byN?fmt(Math.floor(amt/Math.max(1,n-tr.length)))+' each, ':''}split between the ${n} girl${n===1?'':'s'} ${where}${byN?', by nights stayed':''}${tr.length?' (🎉 treating '+tr.map(g=>gname(g).split(' ')[0]).join(', ')+')':''}. If that list changes later, this updates automatically.`:`Nobody is marked as ${where} yet.`}
+    else{const inc=checkedIds('sp_');const tr=inc.filter(g=>document.getElementById('tt_'+g)?.checked);const n=inc.length-tr.length;
+      $('#splithint').textContent=n&&amt?`${fmt(Math.floor(amt/n))} each, ${n} way${n===1?'':'s'}${tr.length?' (🎉 treating '+tr.map(g=>gname(g).split(' ')[0]).join(', ')+')':''}`:''}};
   function setMode(m){
     if(m==='linked'&&!val('e_for'))m='equal';
     $('#e_sm').value=m;
@@ -1025,6 +1081,8 @@ document.addEventListener('click',async ev=>{
   if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
   if(readOnly&&!['copy','filter','pay-new','pay-edit','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
+  if(a==='treat-new'){treatForm();return}
+  if(a==='treat-edit'){treatForm(id);return}
   if(a==='mine-new'){mineForm();wireMineType()}
   else if(a==='mine-in'){mineForm(null,true);wireMineType()}
   else if(a==='mine-edit'){mineForm(id);wireMineType()}
