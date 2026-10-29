@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#3A1240">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Girls Trip">
-<title>Girls Trip</title>
+<meta name="apple-mobile-web-app-title" content="Splitzy">
+<title>Splitzy</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -466,7 +466,7 @@ function renderTabs(){
   $('#tabs').innerHTML=TABS.map(([k,l])=>`<a class="tab" href="#${k}" ${k===tab?'aria-current="page"':''}>${l}</a>`).join('');
 }
 function render(){
-  if(S.loaded){readOnly=isEnded();document.title=S.trip.name||'Girls Trip'}
+  if(S.loaded){readOnly=isEnded();document.title=(S.trip.name?S.trip.name+' · ':'')+'Splitzy'}
   renderHero();renderTabs();setSync();
   const m=$('#main');
   if(!S.loaded){m.innerHTML=`<div class="empty"><b>Loading the trip…</b></div>`;return}
@@ -986,8 +986,8 @@ function renderHome(msg){
   const cur=all.filter(t=>t.status!=='ended').sort((a,b)=>(a.startDate||'9').localeCompare(b.startDate||'9'));
   const arc=all.filter(t=>t.status==='ended').sort((a,b)=>(b.endDate||'').localeCompare(a.endDate||''));
   {const h=$('#hero');h.classList.remove('hasphoto');h.style.backgroundImage=''}
-  $('#hero').innerHTML=`<div class="eyebrow">Girls trips</div><h1>My Trips</h1><div class="meta"><span>${cur.length} current</span><span>${arc.length} archived</span></div>`;
-  document.title='My Trips';
+  $('#hero').innerHTML=`<div class="eyebrow">Splitzy</div><h1>My Trips</h1><div class="meta"><span>${cur.length} current</span><span>${arc.length} archived</span></div>`;
+  document.title='Splitzy';
   const card=t=>`<button class="tripcard" data-home="open" data-id="${esc(t.id)}">
       <span class="tripcard-top"><span class="eyebrow" style="color:var(--accent)">${esc(t.destination||(t.id==='vegas-girls-trip'?'Las Vegas, Nevada':'Girls trip'))}</span>${t.needsCode?'<span class="pill neg">New passcode needed</span>':''}</span>
       <span class="tripcard-name">${esc(t.name||'Untitled trip')}</span>
@@ -1016,7 +1016,7 @@ async function loadOrgs(){
   if(ACTIVE===null&&$('#overlay').hidden)renderHome();
 }
 function makeOrgCode(name){const w=(String(name).toUpperCase().match(/[A-Z]+/)||['ORG'])[0].slice(0,6);const abc='ABCDEFGHJKMNPQRSTUVWXYZ';return w+'-'+(1000+Math.floor(Math.random()*9000))+abc[Math.floor(Math.random()*abc.length)]+abc[Math.floor(Math.random()*abc.length)]}
-function orgInvite(name,code){return `${name}, you’re now a trip organizer! You can start new trips in our Girls Trip app.
+function orgInvite(name,code){return `${name}, you’re now a trip organizer! You can start new trips in Splitzy, our trip app.
 
 1. Open ${location.origin}/ and add it to your home screen if you haven’t.
 2. On My Trips, tap “Start a new trip”.
