@@ -215,6 +215,8 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .imin{border-color:var(--accent);color:var(--accent)}
 .imin.on{background:var(--accent);color:var(--accent-ink)}
 .receiptbox{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px}
+.wrapprev{display:grid;place-items:center;min-height:200px;background:var(--sunk);border-radius:12px;overflow:hidden}
+.wrapprev img{width:100%;max-width:340px;height:auto;display:block;border-radius:12px}
 .archived{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
 .sharepanel{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .sharepanel .code{font-size:26px;font-weight:600;letter-spacing:.12em;margin:2px 0 4px;overflow-wrap:anywhere}
@@ -540,7 +542,7 @@ function render(){
   renderHero();renderTabs();setSync();
   const m=$('#main');
   if(!S.loaded){m.innerHTML=`<div class="empty"><b>Loading the trip…</b></div>`;return}
-  const banner=isEnded()?`<div class="archived"><div><b>This trip has ended${S.trip.endedAt?' ('+esc(dLong(S.trip.endedAt))+')':''}.</b> It’s in the Archive, so it’s view only. You can still mark paybacks under Who owes who.</div><button class="btn sm" data-act="trip-reopen">Reopen trip</button></div>`:'';
+  const banner=isEnded()?`<div class="archived"><div><b>This trip has ended${S.trip.endedAt?' ('+esc(dLong(S.trip.endedAt))+')':''}.</b> It’s in the Archive, so it’s view only. You can still mark paybacks under Who owes who.</div><div class="btnrow"><button class="btn primary sm" data-act="wrapped">🎁 Trip Wrapped</button><button class="btn sm" data-act="trip-reopen">Reopen trip</button></div></div>`:'';
   m.innerHTML=banner+{trip:vTrip,plans:vPlans,expenses:vExpenses,rides:vRides,settle:vSettle,mine:vMine}[tab]();
 }
 
@@ -570,7 +572,7 @@ function vMine(){
       <div class="tile"><div class="l">Money in</div><div class="v pos">${moneyIn?'+'+fmt(moneyIn):fmt(0)}</div></div>
       <div class="tile"><div class="l">Net trip cost</div><div class="v">${fmt(net)}</div></div></div>
     <div class="sub">Net trip cost = your group share <span class="num">${fmt(groupShare)}</span> + what you spent <span class="num">${fmt(total)}</span> − money in <span class="num">${fmt(moneyIn)}</span>.${cash?` Spending includes <span class="num">${fmt(cash)}</span> in ATM withdrawals.`:''}</div>
-    ${gSpent||gWon?`<div class="panel gamb"><b>Gambling</b><span class="small">Played <span class="num">${fmt(gSpent)}</span> · Won <span class="num">${fmt(gWon)}</span></span><span class="pill ${gWon-gSpent>0?'pos':gWon-gSpent<0?'neg':'even'} num">${gWon-gSpent>0?'Up '+fmt(gWon-gSpent):gWon-gSpent<0?'Down '+fmt(gSpent-gWon):'Even'}</span></div>`:''}
+    ${gSpent||gWon?`<div class="panel gamb"><b>Gambling</b><span class="small">Played <span class="num">${fmt(gSpent)}</span> · Won <span class="num">${fmt(gWon)}</span></span><span class="pill ${gWon-gSpent>0?'pos':gWon-gSpent<0?'neg':'even'} num">${gWon-gSpent>0?'Up '+fmt(gWon-gSpent):gWon-gSpent<0?'Down '+fmt(gSpent-gWon):'Even'}</span>${me?(typeof girl(me)?.slotsNet==='number'?`<button class="linkbtn" data-act="slots-share" data-on="0" style="font-size:12px">Remove from Trip Wrapped</button>`:`<button class="linkbtn" data-act="slots-share" data-on="1" style="font-size:12px">Share my result on Trip Wrapped</button>`):''}</div>`:''}
   </section>
   ${cats.length?`<section class="sec"><div class="sec-head"><h2>Spending by category</h2></div><div class="panel bars">${cats.map(([c,v])=>`<div class="bar"><span>${esc(c)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(3,v/max*100)}%;background:${mineColor(c)}"></div></div><span class="num">${fmt(v)}</span></div>`).join('')}</div></section>`:''}
   ${MINE.length?dates.map(d=>`<section class="sec"><div class="dayhead"><h3>${d?dLong(d):'No date'}</h3><span class="sub num">${fmt(byDate[d].filter(x=>!isIn(x)).reduce((t,x)=>t+x.amountCents,0))} spent</span></div><div class="list">${byDate[d].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(x=>`<div class="row" data-act="mine-edit" data-id="${x.id}"><div class="row-main"><span class="row-title">${esc(x.title)}</span><span class="small"><span class="chip">${isIn(x)?'<span class="dot" style="background:var(--pos)"></span>':`<span class="dot" style="background:${mineColor(x.category)}"></span>`}${esc(x.category)}</span> ${esc([isIn(x)?'':x.paidWith,x.notes].filter(Boolean).join(' · '))}</span></div><span class="row-amt ${isIn(x)?'pos':''}">${isIn(x)?'+':''}${fmt(x.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div></section>`).join('')
@@ -780,7 +782,7 @@ function vSettle(){
   const byCat={};S.expenses.forEach(e=>byCat[e.category]=(byCat[e.category]||0)+e.amountCents);
   const cats=Object.entries(byCat).sort((a,c)=>c[1]-a[1]);const max=cats[0]?.[1]||1;
   return `<section class="sec">
-    <div class="sec-head"><div><h2>Who owes who</h2><div class="sub">The fewest payments that make everyone even.</div></div><button class="btn sm" data-act="copy">Copy summary</button></div>
+    <div class="sec-head"><div><h2>Who owes who</h2><div class="sub">The fewest payments that make everyone even.</div></div><div class="btnrow"><button class="btn sm" data-act="wrapped">🎁 Trip Wrapped</button><button class="btn sm" data-act="copy">Copy summary</button></div></div>
     ${!S.expenses.length?`<div class="empty"><b>Nothing to settle yet</b><span>Once expenses are logged, this shows exactly who sends money to whom.</span></div>`:
     xs.length?`<div class="list">${xs.map(x=>{const to=girl(x.to);return `<div class="xfer"><div class="xfer-who">${av(x.from,'xs')}<b>${esc(gname(x.from))}</b><span class="arrow">pays</span>${av(x.to,'xs')}<b>${esc(gname(x.to))}</b></div>
       <div style="display:flex;align-items:center;gap:10px"><span class="xfer-amt num">${fmt(x.amt)}</span><button class="btn sm" data-act="pay-new" data-from="${x.from}" data-to="${x.to}" data-amt="${x.amt}">Mark paid</button></div>
@@ -945,6 +947,71 @@ function vBudget(){
     ${myOwe?`<div class="panel depositme"><b>Your deposit: ${fmt(myOwe)}</b>${payButtons(me,bd.to,myOwe,'Splitzy deposit · '+(S.trip.name||'trip'))}<button class="btn sm" data-act="deposit-paid" data-id="${me}">I paid it</button></div>`:''}
     <div class="list">${rows}</div></section>`;
 }
+/* ---------- Trip Wrapped: a 1080×1920 story image drawn on the phone ---------- */
+function wrappedStats(){
+  const t=S.trip;const total=S.expenses.reduce((x,e)=>x+(e.amountCents||0),0);
+  const byCat={};S.expenses.forEach(e=>byCat[e.category]=(byCat[e.category]||0)+e.amountCents);
+  const topCat=Object.entries(byCat).sort((a,c)=>c[1]-a[1])[0];
+  const s0=pd(t.startDate),e0=pd(t.endDate);const nights=s0&&e0&&e0>s0?Math.round((e0-s0)/864e5):Math.max(0,...S.hotels.map(hotelNights));
+  const popular=[...S.plans].sort((a,c)=>(c.going||[]).filter(girl).length-(a.going||[]).filter(girl).length)[0];
+  const b=balances();const fronted=Object.entries(b).sort((a,c)=>c[1].paid-a[1].paid)[0];
+  const lucky=sortedGirls().filter(g=>typeof g.slotsNet==='number').sort((a,c)=>c.slotsNet-a.slotsNet)[0];
+  return {total,topCat,nights,popular,fronted:fronted&&fronted[1].paid>0?{id:fronted[0],amt:fronted[1].paid}:null,lucky,
+    girls:S.girls.length,acts:S.plans.filter(p=>(p.going||[]).filter(girl).length).length,rides:S.expenses.filter(e=>e.category==='Ride share').length};
+}
+async function drawWrapped(){
+  try{await Promise.all([document.fonts.load('80px Limelight'),document.fonts.load('600 40px Figtree'),document.fonts.load('40px Figtree')])}catch(e){}
+  const W=1080,H=1920,cv=document.createElement('canvas');cv.width=W;cv.height=H;const c=cv.getContext('2d');
+  const plum='#2B0F33',gold='#E9BD55',cream='#FFF4DA',pink='#FF5C9A';
+  const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,'#3A1240');g.addColorStop(1,'#1B0820');c.fillStyle=g;c.fillRect(0,0,W,H);
+  /* banner photo across the top */
+  if(BANNER){await new Promise(r=>{const im=new Image();im.onload=()=>{const bh=640,sc=Math.max(W/im.width,bh/im.height);c.save();c.beginPath();c.rect(0,0,W,bh);c.clip();c.drawImage(im,(W-im.width*sc)/2,(bh-im.height*sc)/2,im.width*sc,im.height*sc);const ov=c.createLinearGradient(0,0,0,bh);ov.addColorStop(0,'rgba(43,15,51,.25)');ov.addColorStop(1,'rgba(43,15,51,1)');c.fillStyle=ov;c.fillRect(0,0,W,bh);c.restore();r()};im.onerror=r;im.src=BANNER})}
+  /* marquee bulbs */
+  const m=36,step=44;c.fillStyle=gold;
+  for(let x=m;x<=W-m;x+=step){[m,H-m].forEach(y=>{c.beginPath();c.arc(x,y,7,0,7);c.fill()})}
+  for(let y=m+step;y<=H-m-step;y+=step){[m,W-m].forEach(x=>{c.beginPath();c.arc(x,y,7,0,7);c.fill()})}
+  const wrap=(txt,x,y,maxW,lh,font,color,align='left')=>{c.font=font;c.fillStyle=color;c.textAlign=align;const words=String(txt).split(' ');let line='',yy=y;for(const w of words){const test=line?line+' '+w:w;if(c.measureText(test).width>maxW&&line){c.fillText(line,x,yy);line=w;yy+=lh}else line=test}c.fillText(line,x,yy);return yy+lh};
+  const st=wrappedStats(),t=S.trip;
+  let y=BANNER?470:230;
+  c.font='600 34px Figtree, sans-serif';c.fillStyle=gold;c.textAlign='left';c.fillText('SPLITZY  WRAPPED',96,y);y+=40;
+  y=wrap(t.name||'Our trip',96,y+70,W-192,104,'92px Limelight, Georgia, serif',cream);
+  const dates=t.startDate?dShort(t.startDate)+(t.endDate?' – '+dShort(t.endDate):'')+(pd(t.endDate||t.startDate)?', '+pd(t.endDate||t.startDate).getFullYear():''):'';
+  y=wrap([t.destination,dates].filter(Boolean).join(' · '),96,y-10,W-192,50,'40px Figtree, sans-serif','rgba(255,244,218,.85)');
+  /* stat tiles */
+  y+=30;const tiles=[[String(st.girls),'girls'],[String(st.nights||'—'),'nights'],[String(st.acts),'activities'],[fmt(st.total).replace(/\.\d\d$/,''),'spent together']];
+  const tw=(W-192-30)/2,th=170;tiles.forEach(([v,l],i)=>{const x=96+(i%2)*(tw+30),yy=y+Math.floor(i/2)*(th+30);c.fillStyle='rgba(255,244,218,.08)';c.beginPath();c.roundRect?c.roundRect(x,yy,tw,th,28):c.rect(x,yy,tw,th);c.fill();c.fillStyle=pink;c.font='600 72px Figtree, sans-serif';c.textAlign='left';c.fillText(v,x+34,yy+92);c.fillStyle=cream;c.font='34px Figtree, sans-serif';c.fillText(l,x+34,yy+140)});
+  y+=2*(th+30)+40;
+  const line=(label,value)=>{if(!value)return;c.fillStyle=gold;c.font='600 30px Figtree, sans-serif';c.textAlign='left';c.fillText(label.toUpperCase(),96,y);y=wrap(value,96,y+56,W-192,56,'600 46px Figtree, sans-serif',cream)+18};
+  if(st.topCat)line('Where the money went',`${st.topCat[0]} · ${fmt(st.topCat[1])}`);
+  if(st.popular&&(st.popular.going||[]).filter(girl).length>1)line('Crowd favorite',`${st.popular.title} (${(st.popular.going||[]).filter(girl).length} girls)`);
+  const tr=treats();if(tr.length)line('We treated',tr.map(x=>`the ${x.label.toLowerCase()}, ${gname(x.girl).split(' ')[0]} 🎉`).join(' & '));
+  if(st.lucky&&st.lucky.slotsNet>0)line('Luckiest at the slots',`${st.lucky.name.split(' ')[0]} (up ${fmt(st.lucky.slotsNet)})`);
+  else if(st.fronted)line('Fronted the most',`${gname(st.fronted.id).split(' ')[0]} · ${fmt(st.fronted.amt)}`);
+  if(st.rides)line('Rides taken',`${st.rides} ride${st.rides===1?'':'s'} around town`);
+  c.textAlign='center';c.fillStyle='rgba(255,244,218,.7)';c.font='32px Figtree, sans-serif';c.fillText('Made with Splitzy · '+location.host,W/2,H-96);
+  return cv;
+}
+async function showWrapped(){
+  openModal('🎁 Trip Wrapped',`<div class="wrapprev"><span class="small">Making your recap…</span></div><p class="hint" style="margin:0" id="wr_hint">Share it to your story or the group chat.</p>`,{saveLabel:'Done',onSave:async()=>null});
+  const cv=await drawWrapped();const url=cv.toDataURL('image/png');
+  const box=$('.wrapprev');if(!box)return;box.innerHTML=`<img src="${url}" alt="Trip Wrapped recap for ${esc(S.trip.name||'our trip')}" id="wr_img">`;
+  const blob=await new Promise(r=>cv.toBlob(r,'image/png'));const file=new File([blob],'splitzy-wrapped.png',{type:'image/png'});
+  const foot=$('.sheet .foot .right');const canShare=navigator.canShare&&navigator.canShare({files:[file]});
+  const btn=document.createElement('button');btn.type='button';btn.className='btn primary';btn.textContent=canShare?'Share':'Save image';foot.prepend(btn);
+  btn.addEventListener('click',async()=>{
+    if(canShare){try{await navigator.share({files:[file],title:S.trip.name||'Trip Wrapped'})}catch(e){}return}
+    const a=document.createElement('a');a.href=url;a.download='splitzy-wrapped.png';document.body.appendChild(a);a.click();a.remove();
+    $('#wr_hint').textContent='If nothing downloaded, press and hold the picture and choose Save to Photos.';
+  });
+  $('#wr_hint').textContent=canShare?'Tap Share to post it or send it to the group chat.':'Press and hold the picture to save it, or tap Save image.';
+}
+async function slotsShare(on){
+  const me=meId();const g=girl(me);if(!g)return;
+  const outs=(MINE||[]).filter(x=>!isIn(x)&&x.category==='Gambling').reduce((t,x)=>t+(x.amountCents||0),0);
+  const won=(MINE||[]).filter(x=>isIn(x)&&x.category==='Gambling winnings').reduce((t,x)=>t+(x.amountCents||0),0);
+  const o={...g};delete o.id;if(on)o.slotsNet=won-outs;else delete o.slotsNet;
+  const err=await write(()=>backend.save('girls',me,o));toast(err||(on?'Your slots result will show on Trip Wrapped (only if you’re up!)':'Removed from Trip Wrapped'));
+}
 async function rsvp(pid){
   const me=meId();const p=plan(pid);if(!me||!p)return;
   const going=new Set(p.going||[]);const joining=!going.has(me);joining?going.add(me):going.delete(me);
@@ -965,7 +1032,7 @@ function endTripForm(){
     ${owed.length?`<div class="panel" style="background:var(--neg-soft);border-color:transparent"><b>${owed.length} payback${owed.length===1?' is':'s are'} still open.</b> That’s fine. You can still mark them paid after the trip ends.</div>`:`<div class="allset">Everyone is square.</div>`}`,
   {saveLabel:'End trip',onSave:async()=>{
     const err=await write(()=>backend.save('trip','main',{...S.trip,status:'ended',endedAt:todayIso()}));
-    if(!err)setTimeout(()=>toast('Trip ended and moved to the Archive'),50);
+    if(!err)setTimeout(()=>{toast('Trip ended. Here’s your Trip Wrapped!');showWrapped()},400);
     return err;
   }});
 }
@@ -1190,8 +1257,10 @@ document.addEventListener('click',async ev=>{
     const err=await modalCtx.onDelete();if(err)merr(err);else{closeModal();toast('Deleted')}return}
   if(!t||t.tagName==='SELECT')return;
   if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
-  if(readOnly&&!['copy','filter','pay-new','pay-edit','zelle','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
+  if(readOnly&&!['copy','filter','pay-new','pay-edit','zelle','wrapped','slots-share','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
+  if(a==='wrapped'){showWrapped();return}
+  if(a==='slots-share'){slotsShare(t.dataset.on==='1');return}
   if(a==='rsvp'){rsvp(id);return}
   if(a==='template'){templateForm();return}
   if(a==='budget-edit'){budgetForm();return}
