@@ -542,7 +542,8 @@ function vExpenses(){
   return `<section class="sec">
     <div class="sec-head"><div><h2>Expenses</h2><div class="sub">Every charge, who paid, and which card.</div></div><button class="btn primary sm" data-act="exp-new">Add expense</button></div>
     <div class="tiles"><div class="tile"><div class="l">Total spent</div><div class="v">${fmt(total)}</div></div>
-      <div class="tile"><div class="l">Per girl</div><div class="v">${fmt(Math.round(total/Math.max(1,S.girls.length)))}</div></div>
+      ${(()=>{const me=meId();if(me){const mine=all.reduce((t,e)=>t+(shares(e)[me]||0),0);return `<div class="tile"><div class="l">Your share</div><div class="v">${fmt(mine)}</div></div>`}
+        const b=balances();const ins=Object.values(b).filter(x=>x.share>0);return `<div class="tile"><div class="l">Avg share</div><div class="v">${fmt(ins.length?Math.round(ins.reduce((t,x)=>t+x.share,0)/ins.length):0)}</div></div>`})()}
       <div class="tile"><div class="l">Charges</div><div class="v">${all.length}</div></div></div>
     <div class="filters"><label class="sub" for="fg">Show</label><select id="fg" data-act="filter"><option value="">Everyone’s expenses</option>${sortedGirls().map(g=>`<option value="${g.id}" ${g.id===filterGirl?'selected':''}>Involving ${esc(g.name)}</option>`).join('')}</select>
       ${filterGirl?`<span class="sub">${esc(gname(filterGirl))}’s share: <b class="num">${fmt(myShare)}</b></span>`:''}</div>
