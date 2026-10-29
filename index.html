@@ -255,9 +255,9 @@ function forgetTrip(id){saveTrips(myTrips().filter(t=>t.id!==id));lsSet('tripboo
 const isEnded=()=>S.trip.status==='ended';
 const hotel=id=>S.hotels.find(h=>h.id===id);
 const plan=id=>S.plans.find(p=>p.id===id);
-const PLAN_CAT={Show:'Shows & tickets',Dinner:'Food',Brunch:'Food',Club:'Clubs & cover','Pool party':'Pool & spa',Spa:'Pool & spa',Shopping:'Shopping',Drinks:'Drinks',Flight:'Flights',Tour:'Shows & tickets'};
+const PLAN_CAT={Show:'Shows & tickets',Dinner:'Food',Brunch:'Food',Lunch:'Food',Bar:'Drinks',Club:'Clubs & cover','Pool party':'Pool & spa',Spa:'Pool & spa',Shopping:'Shopping',Drinks:'Drinks',Flight:'Flights',Tour:'Shows & tickets'};
 const CATS=['Hotel','Food','Drinks','Shows & tickets','Clubs & cover','Ride share','Pool & spa','Shopping','Gambling','Flights','Tips','Other'];
-const PLAN_KINDS=['Show','Dinner','Brunch','Club','Pool party','Spa','Shopping','Tour','Drinks','Flight','Other'];
+const PLAN_KINDS=['Show','Brunch','Lunch','Dinner','Bar','Club','Pool party','Spa','Shopping','Tour','Drinks','Flight','Other'];
 const RIDE_SERVICES=['Uber','Lyft','Taxi','Hotel shuttle','Other'];
 const TABS=[['trip','Trip & girls'],['plans','Calendar'],['expenses','Expenses'],['rides','Rides'],['settle','Who owes who']];
 let tab='trip', backend=null, filterGirl='', readOnly=false;
