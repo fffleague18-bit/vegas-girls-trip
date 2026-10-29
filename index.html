@@ -195,6 +195,10 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .lblrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .quick{display:inline-flex;gap:14px}
 .quick .linkbtn{font-size:13px}
+.marquee-in.hasphoto{background-size:cover;background-position:center}
+.marquee-in.hasphoto h1,.marquee-in.hasphoto .meta{text-shadow:0 1px 8px rgba(0,0,0,.45)}
+.bannerpick{display:grid;gap:8px}
+.bannerprev{height:96px;border-radius:12px;border:1px dashed var(--line);background:var(--sunk) center/cover no-repeat;display:grid;place-items:center}
 .archived{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
 .sharepanel{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .sharepanel .code{font-size:26px;font-weight:600;letter-spacing:.12em;margin:2px 0 4px;overflow-wrap:anywhere}
@@ -360,6 +364,7 @@ function supaBackend(sb,TRIP,code){
     COLS.forEach(c=>S[c]=[]);S.trip={};(data||[]).forEach(apply);S.loaded=true;
     upsertTrip({id:TRIP,name:S.trip.name||'',destination:S.trip.destination||'',startDate:S.trip.startDate||'',endDate:S.trip.endDate||'',status:S.trip.status||'',girls:S.girls.length});
     if(document.getElementById('overlay').hidden)render();else pendingRender=true;
+    syncBanner(sb,TRIP,code);
   }
   return{
     shared:true,
@@ -377,6 +382,13 @@ function supaBackend(sb,TRIP,code){
       if(col==='trip')upsertTrip({id:TRIP,name:obj.name||'',destination:obj.destination||'',startDate:obj.startDate||'',endDate:obj.endDate||'',status:obj.status||''});
       render();
     },
+    async saveBanner(img){
+      const at=img?String(Date.now()):'';
+      if(img){const {data:r,error}=await sb.rpc('trip_save',{p_trip:TRIP,p_code:code,p_id:'banner:main',p_kind:'banner',p_data:{img}});if(error)throw error;if(r==='bad-passcode')throw {code:'28P01'}}
+      else{await sb.rpc('trip_delete',{p_trip:TRIP,p_code:code,p_id:'banner:main'})}
+      BANNER=img||'';bannerAt=at;bannerCacheSet(TRIP,at,BANNER);
+      return at;
+    },
     async remove(col,id){
       const rowId=col+':'+id;
       const {data:r,error}=await sb.rpc('trip_delete',{p_trip:TRIP,p_code:code,p_id:rowId});
@@ -386,6 +398,37 @@ function supaBackend(sb,TRIP,code){
   };
 }
 let pendingRender=false;
+let BANNER='',bannerAt='';
+function bannerCacheGet(id){try{return JSON.parse(localStorage.getItem('tripbook-banner:'+id)||'null')}catch(e){return null}}
+function bannerCacheSet(id,at,img){try{img?localStorage.setItem('tripbook-banner:'+id,JSON.stringify({at,img})):localStorage.removeItem('tripbook-banner:'+id)}catch(e){}}
+async function syncBanner(sb,TRIP,code){
+  const want=S.trip.bannerAt||'';if(want===bannerAt)return;
+  if(!want){BANNER='';bannerAt='';bannerCacheSet(TRIP,'','');renderHero();return}
+  const c=bannerCacheGet(TRIP);if(c&&c.at===want){BANNER=c.img;bannerAt=want;renderHero();return}
+  try{const {data,error}=await sb.rpc('trip_banner',{p_trip:TRIP,p_code:code});if(error)return;
+    BANNER=(data&&data.img)||'';bannerAt=want;bannerCacheSet(TRIP,want,BANNER);renderHero()}catch(e){}
+}
+/* Shrink a photo on the phone before upload: max 1400px wide JPEG. */
+function shrinkImage(file){return new Promise((res,rej)=>{
+  if(!file||!/^image\//.test(file.type||'image/'))return rej(new Error('Pick a photo file.'));
+  const fr=new FileReader();fr.onerror=()=>rej(new Error('Couldn’t read that photo.'));
+  fr.onload=()=>{const im=new Image();im.onerror=()=>rej(new Error('That photo type isn’t supported. Try a JPG or PNG.'));
+    im.onload=()=>{const W=Math.min(1400,im.naturalWidth||1400);const H=Math.round((im.naturalHeight||800)*W/(im.naturalWidth||1400));
+      const cv=document.createElement('canvas');cv.width=W;cv.height=H;cv.getContext('2d').drawImage(im,0,0,W,H);
+      let q=.78,out=cv.toDataURL('image/jpeg',q);while(out.length>380000&&q>.4){q-=.1;out=cv.toDataURL('image/jpeg',q)}res(out)};
+    im.src=fr.result};
+  fr.readAsDataURL(file)})}
+function bannerField(prefix,cur){return `<div class="f"><span class="lbl">Banner photo (optional)</span>
+    <div class="bannerpick"><div class="bannerprev" id="${prefix}_prev" ${cur?`style="background-image:url('${cur}')"`:''}>${cur?'':'<span class="small">No photo</span>'}</div>
+    <div class="btnrow" style="justify-content:flex-start"><label class="btn sm" for="${prefix}_file">${cur?'Change photo':'Upload photo'}</label><button type="button" class="btn sm" id="${prefix}_clear" ${cur?'':'hidden'}>Remove photo</button></div></div>
+    <input type="file" id="${prefix}_file" accept="image/*" hidden><input type="hidden" id="${prefix}_img" value="">
+    <span class="hint">Shows behind the trip name at the top. Wide photos work best.</span></div>`}
+function wireBanner(prefix){
+  const f=document.getElementById(prefix+'_file'),pv=document.getElementById(prefix+'_prev'),hid=document.getElementById(prefix+'_img'),clr=document.getElementById(prefix+'_clear');
+  f.addEventListener('change',async()=>{const file=f.files&&f.files[0];if(!file)return;pv.innerHTML='<span class="small">Preparing…</span>';
+    try{const d=await shrinkImage(file);hid.value=d;pv.style.backgroundImage=`url('${d}')`;pv.innerHTML='';clr.hidden=false}catch(e){pv.innerHTML='';merr(e.message)}});
+  clr.addEventListener('click',()=>{hid.value='CLEAR';pv.style.backgroundImage='';pv.innerHTML='<span class="small">No photo</span>';clr.hidden=true;f.value=''});
+}
 let live=false;
 async function write(fn){
   try{await fn();return null}
@@ -412,6 +455,7 @@ function renderHero(){
     if(isEnded())cd='Trip ended · in the Archive';
     else if(days===0)cd='It’s today!';}
   const dates=s?`${dShort(t.startDate)}${e?' – '+dShort(t.endDate):''}`:'Dates not set';
+  const hin=$('#hero');hin.classList.toggle('hasphoto',!!BANNER);hin.style.backgroundImage=BANNER?`linear-gradient(90deg,rgba(26,8,32,.82) 0%,rgba(26,8,32,.55) 55%,rgba(26,8,32,.25) 100%),url('${BANNER}')`:'';
   $('#hero').innerHTML=`
     <div class="eyebrow">${esc(t.destination||(ACTIVE&&ACTIVE.id==='vegas-girls-trip'?'Las Vegas, Nevada':'Girls trip'))}</div>
     <h1>${esc(t.name||'Our trip')}</h1>
@@ -619,13 +663,17 @@ function tripForm(){
     <div class="f"><label for="t_name">Trip name</label><input id="t_name" value="${esc(t.name||'')}" placeholder="Vegas Girls Trip"></div>
     <div class="f"><label for="t_dest">Where</label><input id="t_dest" value="${esc(t.destination||(ACTIVE&&ACTIVE.id==='vegas-girls-trip'?'Las Vegas, Nevada':''))}" placeholder="Las Vegas, Nevada"></div>
     <div class="two"><div class="f"><label for="t_s">First day</label><input type="date" id="t_s" value="${esc(t.startDate)}"></div><div class="f"><label for="t_e">Last day</label><input type="date" id="t_e" value="${esc(t.endDate)}"></div></div>
+    ${backend&&backend.saveBanner?bannerField('tb',BANNER):''}
     <div class="f"><label for="t_em">Emergency contacts</label><textarea id="t_em">${esc(t.emergency)}</textarea></div>
     <div class="f"><label for="t_n">Notes</label><textarea id="t_n" placeholder="Flights, dress code for Saturday, packing list…">${esc(t.notes)}</textarea></div>`,
   {onSave:async()=>{
     if(val('t_s')&&val('t_e')&&val('t_e')<val('t_s'))return 'The last day comes before the first day.';
+    const bimg=val('tb_img');
+    if(bimg){try{const at=await backend.saveBanner(bimg==='CLEAR'?'':bimg);S.trip.bannerAt=at}catch(e){return 'Couldn’t save the photo. Check your connection and try again.'}}
     const o={...S.trip,name:val('t_name'),destination:val('t_dest'),startDate:val('t_s'),endDate:val('t_e'),emergency:val('t_em'),notes:val('t_n')};
     return write(()=>backend.save('trip','main',o));
   }});
+  if(document.getElementById('tb_file'))wireBanner('tb');
 }
 
 function guestChecks(prefix,sel){
@@ -922,6 +970,7 @@ function startApp(sb,tr){
   $('#signout').hidden=!sb;$('#mytrips').hidden=!sb;
   if(started)return;started=true;
   backend=sb?supaBackend(sb,tr.id,tr.code):localBackend();
+  if(tr){const c=bannerCacheGet(tr.id);if(c&&c.img){BANNER=c.img;bannerAt=c.at}}
   route();backend.start(()=>ensureMe());setSync();
 }
 function openTrip(id){lsSet(ACTIVE_KEY,id);location.hash='';location.reload()}
@@ -936,6 +985,7 @@ function renderHome(msg){
   const all=myTrips();
   const cur=all.filter(t=>t.status!=='ended').sort((a,b)=>(a.startDate||'9').localeCompare(b.startDate||'9'));
   const arc=all.filter(t=>t.status==='ended').sort((a,b)=>(b.endDate||'').localeCompare(a.endDate||''));
+  {const h=$('#hero');h.classList.remove('hasphoto');h.style.backgroundImage=''}
   $('#hero').innerHTML=`<div class="eyebrow">Girls trips</div><h1>My Trips</h1><div class="meta"><span>${cur.length} current</span><span>${arc.length} archived</span></div>`;
   document.title='My Trips';
   const card=t=>`<button class="tripcard" data-home="open" data-id="${esc(t.id)}">
@@ -1032,6 +1082,7 @@ function newTripForm(){
     <div class="f"><label for="n_name">Trip name</label><input id="n_name" placeholder="Nashville Birthday Weekend"></div>
     <div class="f"><label for="n_dest">Where</label><input id="n_dest" placeholder="Nashville, Tennessee"></div>
     <div class="two"><div class="f"><label for="n_s">First day</label><input type="date" id="n_s"></div><div class="f"><label for="n_e">Last day</label><input type="date" id="n_e"></div></div>
+    ${bannerField('nb','')}
     <div class="f"><label for="n_org">Organizer code</label><input id="n_org" type="password" autocomplete="off" value="${esc(lsGet('tripbook-org'))}"><span class="hint">Only the owner and organizers can start trips. Ask Pennie if you need one. This phone remembers it after the first time.</span></div>
     <div class="f"><label for="n_code">Passcode for this trip</label><input id="n_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.12em;font-size:18px;text-transform:uppercase"><span class="hint">At least 8 characters with at least one number. Text it only to the girls on this trip. They’ll see this trip and nothing else.</span></div>`,
   {saveLabel:'Create trip',onSave:async()=>{
@@ -1040,7 +1091,8 @@ function newTripForm(){
     const org=val('n_org');if(!org)return 'Enter the organizer code.';
     const code=val('n_code').toUpperCase().replace(/\s+/g,'');if(code.length<8||!/\d/.test(code))return 'Make the passcode at least 8 characters with at least one number.';
     const id='trip-'+uid().toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,36);
-    const data={name,destination:val('n_dest'),startDate:val('n_s'),endDate:val('n_e')};
+    const nimg=val('nb_img')&&val('nb_img')!=='CLEAR'?val('nb_img'):'';
+    const data={name,destination:val('n_dest'),startDate:val('n_s'),endDate:val('n_e'),...(nimg?{bannerAt:String(Date.now())}:{})};
     let r;try{const res=await SB.rpc('trip_create',{p_trip:id,p_code:code,p_data:data,p_org:org});if(res.error)throw res.error;r=res.data}
     catch(e){return tooMany(e)?LOCKED:'Couldn’t create the trip. Check your connection and try again.'}
     if(r==='not-organizer')return 'That organizer code isn’t right. Only trip organizers can start a new trip.';
@@ -1048,8 +1100,10 @@ function newTripForm(){
     if(r==='too-weak')return 'Make the passcode at least 8 characters with at least one number.';
     if(r!=='ok')return 'Couldn’t create the trip. Try again.';
     lsSet('tripbook-org',org);
+    if(nimg){try{const r1=await SB.rpc('trip_save',{p_trip:id,p_code:code,p_id:'banner:main',p_kind:'banner',p_data:{img:nimg}});if(!r1.error)bannerCacheSet(id,data.bannerAt,nimg)}catch(e){}}
     upsertTrip({id,code,...data,status:'',girls:0});setTimeout(()=>openTrip(id),30);return null;
   }});
+  wireBanner('nb');
   {const n=$('#n_name'),c=$('#n_code');if(n&&c){n.addEventListener('input',()=>{if(!c.dataset.touched)c.value=n.value.trim()?suggestCode(n.value):''});c.addEventListener('input',()=>c.dataset.touched='1')}}
 }
 document.addEventListener('click',ev=>{
