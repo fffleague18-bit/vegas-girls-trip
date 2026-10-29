@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Girls Trip">
 <title>Girls Trip</title>
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -335,6 +336,8 @@ function localBackend(){
   };
 }
 /* Supabase table: trip_items (trip_id, id, kind, data, updated_at). One row per girl/expense/plan/payment, plus one 'trip' row. */
+const tooMany=e=>/too many/i.test((e&&e.message)||'');
+const LOCKED='Too many wrong passcodes from this device. Wait 15 minutes and try again.';
 function supaBackend(sb,TRIP,code){
   const apply=row=>{
     if(!row||row.trip_id!==TRIP)return;
@@ -348,6 +351,7 @@ function supaBackend(sb,TRIP,code){
   async function loadAll(){
     const {data,error}=await sb.rpc('trip_load',{p_trip:TRIP,p_code:code});
     if(error)throw error;
+    if((data||[]).some(r=>r.id==='error:passcode'))throw {code:'28P01',message:'wrong passcode'};
     const nsig=JSON.stringify((data||[]).map(r=>[r.id,r.updated_at]).sort());
     if(nsig===sig&&S.loaded)return;sig=nsig;
     COLS.forEach(c=>S[c]=[]);S.trip={};(data||[]).forEach(apply);S.loaded=true;
@@ -364,16 +368,16 @@ function supaBackend(sb,TRIP,code){
     },
     async save(col,id,obj){
       const rowId=col==='trip'?'trip:main':col+':'+id;
-      const {error}=await sb.rpc('trip_save',{p_trip:TRIP,p_code:code,p_id:rowId,p_kind:col,p_data:obj});
-      if(error)throw error;
+      const {data:r,error}=await sb.rpc('trip_save',{p_trip:TRIP,p_code:code,p_id:rowId,p_kind:col,p_data:obj});
+      if(error)throw error;if(r==='bad-passcode')throw {code:'28P01',message:'wrong passcode'};
       apply({trip_id:TRIP,id:rowId,kind:col,data:obj});
       if(col==='trip')upsertTrip({id:TRIP,name:obj.name||'',destination:obj.destination||'',startDate:obj.startDate||'',endDate:obj.endDate||'',status:obj.status||''});
       render();
     },
     async remove(col,id){
       const rowId=col+':'+id;
-      const {error}=await sb.rpc('trip_delete',{p_trip:TRIP,p_code:code,p_id:rowId});
-      if(error)throw error;
+      const {data:r,error}=await sb.rpc('trip_delete',{p_trip:TRIP,p_code:code,p_id:rowId});
+      if(error)throw error;if(r==='bad-passcode')throw {code:'28P01',message:'wrong passcode'};
       drop(rowId);render();
     }
   };
@@ -383,7 +387,8 @@ let live=false;
 async function write(fn){
   try{await fn();return null}
   catch(e){
-    if(e&&(e.code==='28P01'||/passcode/i.test(e.message||'')))return 'The trip passcode changed. Tap “Switch person” at the top and enter the new one.';
+    if(tooMany(e))return LOCKED;
+    if(e&&(e.code==='28P01'||/passcode/i.test(e.message||'')))return 'The trip passcode changed. Tap “My trips” and open the trip again with the new passcode.';
     return 'That didn’t save. Check your connection and try again.';
   }
 }
@@ -931,7 +936,8 @@ async function refreshHome(){
   if(!SB)return;let changed=false;
   await Promise.all(myTrips().map(async t=>{
     try{const {data,error}=await SB.rpc('trip_load',{p_trip:t.id,p_code:t.code});
-      if(error){if(error.code==='28P01'||/passcode/i.test(error.message||'')){upsertTrip({id:t.id,needsCode:true});changed=true}return}
+      if(error)return;
+      if((data||[]).some(r=>r.id==='error:passcode')){upsertTrip({id:t.id,needsCode:true});changed=true;return}
       const tr=(data||[]).find(r=>r.id==='trip:main')?.data||{};const girls=(data||[]).filter(r=>r.kind==='girls').length;
       upsertTrip({id:t.id,needsCode:false,name:tr.name||t.name||'',destination:tr.destination||'',startDate:tr.startDate||'',endDate:tr.endDate||'',status:tr.status||'',girls});changed=true;
     }catch(e){}
@@ -945,7 +951,7 @@ function joinForm(msg){
     <div class="f"><label for="j_code">Trip passcode</label><input id="j_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.12em;font-size:18px;text-transform:uppercase"></div>`,
   {saveLabel:'Join trip',onSave:async()=>{
     const code=val('j_code').toUpperCase();if(code.length<6)return 'Type the full passcode.';
-    let id=null;try{const {data,error}=await SB.rpc('trip_find',{p_code:code});if(error)throw error;id=data}catch(e){return 'Couldn’t reach the trips. Check your connection and try again.'}
+    let id=null;try{const {data,error}=await SB.rpc('trip_find',{p_code:code});if(error)throw error;id=data}catch(e){return tooMany(e)?LOCKED:'Couldn’t reach the trips. Check your connection and try again.'}
     if(!id)return 'No trip uses that passcode. Check the group text and try again.';
     upsertTrip({id,code,needsCode:false});setTimeout(()=>openTrip(id),30);return null;
   }});
@@ -956,16 +962,22 @@ function newTripForm(){
     <div class="f"><label for="n_name">Trip name</label><input id="n_name" placeholder="Nashville Birthday Weekend"></div>
     <div class="f"><label for="n_dest">Where</label><input id="n_dest" placeholder="Nashville, Tennessee"></div>
     <div class="two"><div class="f"><label for="n_s">First day</label><input type="date" id="n_s"></div><div class="f"><label for="n_e">Last day</label><input type="date" id="n_e"></div></div>
-    <div class="f"><label for="n_code">Passcode for this trip</label><input id="n_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.12em;font-size:18px;text-transform:uppercase"><span class="hint">At least 6 letters or numbers. Text it only to the girls on this trip. They’ll see this trip and nothing else.</span></div>`,
+    <div class="f"><label for="n_org">Organizer code</label><input id="n_org" type="password" autocomplete="off" value="${esc(lsGet('tripbook-org'))}"><span class="hint">Only trip organizers can start a new trip. This phone remembers it after the first time.</span></div>
+    <div class="f"><label for="n_code">Passcode for this trip</label><input id="n_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.12em;font-size:18px;text-transform:uppercase"><span class="hint">At least 8 characters with at least one number. Text it only to the girls on this trip. They’ll see this trip and nothing else.</span></div>`,
   {saveLabel:'Create trip',onSave:async()=>{
     const name=val('n_name');if(!name)return 'Give the trip a name.';
     if(val('n_s')&&val('n_e')&&val('n_e')<val('n_s'))return 'The last day comes before the first day.';
-    const code=val('n_code').toUpperCase().replace(/\s+/g,'');if(code.length<6)return 'Make the passcode at least 6 letters or numbers.';
+    const org=val('n_org');if(!org)return 'Enter the organizer code.';
+    const code=val('n_code').toUpperCase().replace(/\s+/g,'');if(code.length<8||!/\d/.test(code))return 'Make the passcode at least 8 characters with at least one number.';
     const id='trip-'+uid().toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,36);
     const data={name,destination:val('n_dest'),startDate:val('n_s'),endDate:val('n_e')};
-    try{const {error}=await SB.rpc('trip_create',{p_trip:id,p_code:code,p_data:data});
-      if(error){if(error.code==='23505'||/taken/i.test(error.message||''))return 'Another trip already uses that passcode. Pick a different one.';throw error}}
-    catch(e){return 'Couldn’t create the trip. Check your connection and try again.'}
+    let r;try{const res=await SB.rpc('trip_create',{p_trip:id,p_code:code,p_data:data,p_org:org});if(res.error)throw res.error;r=res.data}
+    catch(e){return tooMany(e)?LOCKED:'Couldn’t create the trip. Check your connection and try again.'}
+    if(r==='not-organizer')return 'That organizer code isn’t right. Only trip organizers can start a new trip.';
+    if(r==='taken')return 'Another trip already uses that passcode. Pick a different one.';
+    if(r==='too-weak')return 'Make the passcode at least 8 characters with at least one number.';
+    if(r!=='ok')return 'Couldn’t create the trip. Try again.';
+    lsSet('tripbook-org',org);
     upsertTrip({id,code,...data,status:'',girls:0});setTimeout(()=>openTrip(id),30);return null;
   }});
   {const n=$('#n_name'),c=$('#n_code');if(n&&c){n.addEventListener('input',()=>{if(!c.dataset.touched)c.value=n.value.trim()?suggestCode(n.value):''});c.addEventListener('input',()=>c.dataset.touched='1')}}
@@ -988,7 +1000,7 @@ document.addEventListener('click',ev=>{
   $('#mytrips').addEventListener('click',goHome);
   const act=lsGet(ACTIVE_KEY);const tr=myTrips().find(t=>t.id===act);
   if(tr){
-    let ok=true;try{const {data,error}=await SB.rpc('trip_code_ok',{p_trip:tr.id,p_code:tr.code});if(!error)ok=data===true}catch(e){}
+    let ok=true;try{const {data,error}=await SB.rpc('trip_code_ok',{p_trip:tr.id,p_code:tr.code});if(error&&tooMany(error)){renderHome(LOCKED);return}if(!error)ok=data===true}catch(e){}
     if(ok){startApp(SB,tr);return}
     upsertTrip({id:tr.id,needsCode:true});lsSet(ACTIVE_KEY,'');
     renderHome('The passcode for '+(tr.name||'your trip')+' changed. Tap it to enter the new one.');refreshHome();return;
