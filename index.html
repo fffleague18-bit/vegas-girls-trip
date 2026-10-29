@@ -336,9 +336,9 @@ function splitWeighted(amount,ids,w){
 }
 /* Payment apps: each girl can list Venmo, Cash App, PayPal and Zelle. Older single field "payHandle" still works. */
 function payApps(g){
-  if(!g)return {};const a={venmo:g.venmo||'',cashapp:g.cashapp||'',paypal:g.paypal||'',zelle:g.zelle||''};
+  if(!g)return {};const a={venmo:g.venmo||'',cashapp:g.cashapp||'',paypal:g.paypal||'',zelle:g.zelle||'',applecash:g.applecash||''};
   const h=(g.payHandle||'').trim();
-  if(h&&!a.venmo&&!a.cashapp&&!a.paypal&&!a.zelle){if(/^\$/.test(h))a.cashapp=h;else if(/paypal/i.test(h))a.paypal=h;else if(/zelle|\d{3}.*\d{4}|@.+\./i.test(h)&&!/^@/.test(h))a.zelle=h.replace(/zelle:?/i,'').trim();else a.venmo=h}
+  if(h&&!a.venmo&&!a.cashapp&&!a.paypal&&!a.zelle&&!a.applecash){if(/^\$/.test(h))a.cashapp=h;else if(/paypal/i.test(h))a.paypal=h;else if(/zelle|\d{3}.*\d{4}|@.+\./i.test(h)&&!/^@/.test(h))a.zelle=h.replace(/zelle:?/i,'').trim();else a.venmo=h}
   return a;
 }
 const clean=(v,re)=>String(v||'').trim().replace(re,'');
@@ -348,11 +348,14 @@ function payLinks(toId,amt,note){
   if(a.cashapp){const u=clean(a.cashapp,/^\$|^https?:\/\/cash\.app\/\$?/i);out.push({app:'Cash App',href:`https://cash.app/$${encodeURIComponent(u)}/${d}`})}
   if(a.paypal){const u=clean(a.paypal,/^https?:\/\/(www\.)?paypal\.me\/|^paypal\.me\/|^@/i);out.push({app:'PayPal',href:`https://paypal.me/${encodeURIComponent(u)}/${d}`})}
   if(a.zelle)out.push({app:'Zelle',zelle:a.zelle});
+  /* Apple Cash has no web payment link: open Messages to her with the amount written out, then tap + → Apple Cash. iPhone/iPad/Mac only. */
+  if(a.applecash&&/iPhone|iPad|Macintosh/.test(navigator.userAgent)){const num=String(a.applecash).trim();const to=/@/.test(num)?num:num.replace(/[^\d+]/g,'');
+    out.push({app:'Apple Cash',href:`sms:${encodeURIComponent(to)}&body=${encodeURIComponent(note+': sending '+fmt(amt)+' with Apple Cash')}`,apple:true})}
   return out;
 }
 function payButtons(from,to,amt,note){
   const ls=payLinks(to,amt,note);if(!ls.length)return '';
-  return `<div class="paybtns">${ls.map(l=>l.href?`<a class="btn sm paybtn" href="${esc(l.href)}" target="_blank" rel="noopener">Pay ${esc(fmt(amt))} with ${esc(l.app)}</a>`:`<button type="button" class="btn sm paybtn" data-act="zelle" data-to="${to}" data-amt="${amt}">Zelle ${esc(l.zelle)}</button>`).join('')}</div>`;
+  return `<div class="paybtns">${ls.map(l=>l.apple?`<a class="btn sm paybtn" href="${esc(l.href)}" data-act="applecash-tip">Pay ${esc(fmt(amt))} with Apple Cash</a>`:l.href?`<a class="btn sm paybtn" href="${esc(l.href)}" target="_blank" rel="noopener">Pay ${esc(fmt(amt))} with ${esc(l.app)}</a>`:`<button type="button" class="btn sm paybtn" data-act="zelle" data-to="${to}" data-amt="${amt}">Zelle ${esc(l.zelle)}</button>`).join('')}</div>`;
 }
 const TREAT_LABELS=['Bride','Birthday girl','Bachelorette','Bride-to-be','Mom-to-be','Graduate','Guest of honor','Newly single','Retiree','Promotion queen'];
 const treats=()=>(S.trip.treats||[]).filter(t=>girl(t.girl));
@@ -659,7 +662,7 @@ function vTrip(){
   const girls=S.girls.length?`<div class="girls">${sortedGirls().map(g=>{
     const hs=S.hotels.filter(h=>(h.guests||[]).includes(g.id)).map(h=>h.name);
     return `<button class="girl" data-act="girl-edit" data-id="${g.id}">
-      <div class="girl-top">${av(g.id)}<div><div class="girl-name">${esc(g.name)}${g.id===me?' <span class="chip">You</span>':''}${treatOf(g.id)?` <span class="chip treatchip">🎉 ${esc(treatOf(g.id).label)}</span>`:''}</div><div class="small">${esc((()=>{const a=payApps(g);return [g.phone,a.venmo&&'Venmo '+a.venmo,a.cashapp&&'Cash App '+a.cashapp,a.paypal&&'PayPal',a.zelle&&'Zelle'].filter(Boolean).join(' · ')})()||'Tap to add phone & Venmo')}</div></div></div>
+      <div class="girl-top">${av(g.id)}<div><div class="girl-name">${esc(g.name)}${g.id===me?' <span class="chip">You</span>':''}${treatOf(g.id)?` <span class="chip treatchip">🎉 ${esc(treatOf(g.id).label)}</span>`:''}</div><div class="small">${esc((()=>{const a=payApps(g);return [g.phone,a.venmo&&'Venmo '+a.venmo,a.cashapp&&'Cash App '+a.cashapp,a.paypal&&'PayPal',a.zelle&&'Zelle',a.applecash&&'Apple Cash'].filter(Boolean).join(' · ')})()||'Tap to add phone & Venmo')}</div></div></div>
       ${hs.length?`<div class="small">Staying at ${esc(hs.join(', '))}</div>`:''}
       ${(g.cards||'').trim()?`<div class="chips">${g.cards.split(',').map(c=>c.trim()).filter(Boolean).map(c=>`<span class="chip">${esc(c)}</span>`).join('')}</div>`:''}
       <div class="small">Paid so far <span class="num">${fmt(b[g.id]?.paid)}</span></div>
@@ -1045,13 +1048,14 @@ function girlForm(id){
     <div class="f"><label for="g_p">Phone</label><input id="g_p" inputmode="tel" value="${esc(g.phone)}"></div>
     ${(()=>{const PA=payApps(g);return `<div class="two"><div class="f"><label for="g_venmo">Venmo</label><input id="g_venmo" value="${esc(PA.venmo)}" placeholder="@username" autocapitalize="off"></div><div class="f"><label for="g_cashapp">Cash App</label><input id="g_cashapp" value="${esc(PA.cashapp)}" placeholder="$cashtag" autocapitalize="off"></div></div>
     <div class="two"><div class="f"><label for="g_paypal">PayPal</label><input id="g_paypal" value="${esc(PA.paypal)}" placeholder="paypal.me name" autocapitalize="off"></div><div class="f"><label for="g_zelle">Zelle</label><input id="g_zelle" value="${esc(PA.zelle)}" placeholder="Phone or email" autocapitalize="off"></div></div>
+    <div class="f"><label for="g_applecash">Apple Cash</label><input id="g_applecash" value="${esc(PA.applecash)}" placeholder="iPhone number or Apple ID email" autocapitalize="off"></div>
     <span class="hint">Fill in any you use. The girls get one-tap buttons to pay you back.</span>`})()}
     <div class="f"><label for="g_c">Cards she might use</label><input id="g_c" value="${esc(g.cards)}" maxlength="120" placeholder="Amex 1005, Chase 4417"><span class="hint">Card name and the <b>last 4 digits only</b>. Separate cards with commas.</span></div>
     ${g.email?`<div class="hint">Signs in as ${esc(g.email)}</div>`:id?'':`<div class="hint">Girls who sign in add themselves. Use this only for someone who won’t be using the app.</div>`}`,
   {onSave:async()=>{
     const name=val('g_n');if(!name)return 'Add her name.';
     {const ce=cardErr(val('g_c'));if(ce)return ce;}
-    const o={...g,name,phone:val('g_p'),venmo:val('g_venmo'),cashapp:val('g_cashapp'),paypal:val('g_paypal'),zelle:val('g_zelle'),payHandle:'',cards:val('g_c'),email:g.email||'',createdAt:g.createdAt||Date.now()};delete o.id;
+    const o={...g,name,phone:val('g_p'),venmo:val('g_venmo'),cashapp:val('g_cashapp'),paypal:val('g_paypal'),zelle:val('g_zelle'),applecash:val('g_applecash'),payHandle:'',cards:val('g_c'),email:g.email||'',createdAt:g.createdAt||Date.now()};delete o.id;
     return write(()=>backend.save('girls',id||uid(),o));
   },onDelete:id?async()=>used?`${g.name} has expenses or payments. Remove those first so the math stays right.`:write(()=>backend.remove('girls',id)):null});
 }
@@ -1068,19 +1072,20 @@ function ensureMe(force){
     <div class="f"><label for="w_p">Phone</label><input id="w_p" inputmode="tel"></div>
     ${(()=>{const PA={};return `<div class="two"><div class="f"><label for="w_venmo">Venmo</label><input id="w_venmo" value="${esc(PA.venmo)}" placeholder="@username" autocapitalize="off"></div><div class="f"><label for="w_cashapp">Cash App</label><input id="w_cashapp" value="${esc(PA.cashapp)}" placeholder="$cashtag" autocapitalize="off"></div></div>
     <div class="two"><div class="f"><label for="w_paypal">PayPal</label><input id="w_paypal" value="${esc(PA.paypal)}" placeholder="paypal.me name" autocapitalize="off"></div><div class="f"><label for="w_zelle">Zelle</label><input id="w_zelle" value="${esc(PA.zelle)}" placeholder="Phone or email" autocapitalize="off"></div></div>
+    <div class="f"><label for="w_applecash">Apple Cash</label><input id="w_applecash" value="${esc(PA.applecash)}" placeholder="iPhone number or Apple ID email" autocapitalize="off"></div>
     <span class="hint">Fill in any you use. The girls get one-tap buttons to pay you back.</span>`})()}
     <div class="f"><label for="w_c">Cards you might use</label><input id="w_c" maxlength="120" placeholder="Amex 1005, Chase 4417"><span class="hint">Card name and the <b>last 4 digits only</b>. Never the full number.</span></div>`,
   {saveLabel:'That’s me',onSave:async()=>{
     const name=val('w_n');if(!name)return 'Add your name.';
     {const ce=cardErr(val('w_c'));if(ce)return ce;}
     const claim=val('w_who');const ex=claim?girl(claim)||{}:{};const id=claim||uid();
-    const o={...ex,name,phone:val('w_p'),venmo:val('w_venmo'),cashapp:val('w_cashapp'),paypal:val('w_paypal'),zelle:val('w_zelle'),payHandle:'',cards:val('w_c'),createdAt:ex.createdAt||Date.now()};delete o.id;
+    const o={...ex,name,phone:val('w_p'),venmo:val('w_venmo'),cashapp:val('w_cashapp'),paypal:val('w_paypal'),zelle:val('w_zelle'),applecash:val('w_applecash'),payHandle:'',cards:val('w_c'),createdAt:ex.createdAt||Date.now()};delete o.id;
     const err=await write(()=>backend.save('girls',id,o));
     if(!err){lsSet(meKey(),id);render();setTimeout(()=>toast('Hi '+name+'! You’re on the trip.'),50)}
     return err;
   }});
   const w=document.getElementById('w_who');
-  const fill=()=>{const g=girl(w?w.value:'')||{};const pa=payApps(g);['n:name','p:phone','c:cards'].forEach(k=>{const[f,p]=k.split(':');document.getElementById('w_'+f).value=g[p]||''});['venmo','cashapp','paypal','zelle'].forEach(k=>{document.getElementById('w_'+k).value=pa[k]||''})};
+  const fill=()=>{const g=girl(w?w.value:'')||{};const pa=payApps(g);['n:name','p:phone','c:cards'].forEach(k=>{const[f,p]=k.split(':');document.getElementById('w_'+f).value=g[p]||''});['venmo','cashapp','paypal','zelle','applecash'].forEach(k=>{document.getElementById('w_'+k).value=pa[k]||''})};
   if(w)w.addEventListener('change',fill);
 }
 
@@ -1257,8 +1262,9 @@ document.addEventListener('click',async ev=>{
     const err=await modalCtx.onDelete();if(err)merr(err);else{closeModal();toast('Deleted')}return}
   if(!t||t.tagName==='SELECT')return;
   if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
-  if(readOnly&&!['copy','filter','pay-new','pay-edit','zelle','wrapped','slots-share','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
+  if(readOnly&&!['copy','filter','pay-new','pay-edit','zelle','applecash-tip','wrapped','slots-share','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
+  if(a==='applecash-tip'){setTimeout(()=>toast('In Messages, tap + then Apple Cash, enter the amount, and send. Then come back and tap Mark paid.'),300);return}
   if(a==='wrapped'){showWrapped();return}
   if(a==='slots-share'){slotsShare(t.dataset.on==='1');return}
   if(a==='rsvp'){rsvp(id);return}
