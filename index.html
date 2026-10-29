@@ -201,6 +201,8 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .marquee-in.hasphoto h1,.marquee-in.hasphoto .meta{text-shadow:0 1px 8px rgba(0,0,0,.45)}
 .bannerpick{display:grid;gap:8px}
 .bannerprev{height:96px;border-radius:12px;border:1px dashed var(--line);background:var(--sunk) center/cover no-repeat;display:grid;place-items:center}
+.gamb{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 14px}
+.row-amt.pos,.tile .v.pos{color:var(--pos)}
 .archived{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
 .sharepanel{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .sharepanel .code{font-size:26px;font-weight:600;letter-spacing:.12em;margin:2px 0 4px;overflow-wrap:anywhere}
@@ -270,6 +272,8 @@ const PLAN_KINDS=['Show','Brunch','Lunch','Dinner','Bar','Club','Pool party','Sp
 const RIDE_SERVICES=['Uber','Lyft','Taxi','Hotel shuttle','Other'];
 const TABS=[['trip','Trip & girls'],['plans','Calendar'],['expenses','Expenses'],['rides','Rides'],['settle','Who owes who'],['mine','Just me']];
 const MINE_CATS=['Food','Drinks','Snacks','ATM withdrawal','Gambling','Shopping','Tips','Ride share','Spa & beauty','Souvenirs','Other'];
+const MINE_IN_CATS=['Gambling winnings','Cash back','Refund','Gift','Other money in'];
+const isIn=x=>x.type==='in';
 let MINE=null,mineLoading=false;
 function myKey(){if(!ACTIVE)return 'local-device-key-000000';const k='tripbook-mykey:'+ACTIVE.id;let v=lsGet(k);if(!v){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';v=Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>a[b%a.length]).join('');lsSet(k,v)}return v}
 const prettyKey=k=>k.match(/.{1,4}/g).join('-');
@@ -494,23 +498,29 @@ async function loadMine(){
 function vMine(){
   if(MINE===null){loadMine();return `<section class="sec"><div class="sec-head"><h2>Just me</h2></div><div class="empty"><b>Loading your private list…</b></div></section>`}
   const me=meId();const groupShare=me?S.expenses.reduce((t,e)=>t+(shares(e)[me]||0),0):0;
-  const total=MINE.reduce((t,x)=>t+(x.amountCents||0),0);
-  const cash=MINE.filter(x=>x.category==='ATM withdrawal').reduce((t,x)=>t+(x.amountCents||0),0);
-  const byCat={};MINE.forEach(x=>byCat[x.category]=(byCat[x.category]||0)+(x.amountCents||0));
+  const outs=MINE.filter(x=>!isIn(x)),ins=MINE.filter(isIn);
+  const total=outs.reduce((t,x)=>t+(x.amountCents||0),0);
+  const moneyIn=ins.reduce((t,x)=>t+(x.amountCents||0),0);
+  const net=groupShare+total-moneyIn;
+  const cash=outs.filter(x=>x.category==='ATM withdrawal').reduce((t,x)=>t+(x.amountCents||0),0);
+  const gSpent=outs.filter(x=>x.category==='Gambling').reduce((t,x)=>t+(x.amountCents||0),0);
+  const gWon=ins.filter(x=>x.category==='Gambling winnings').reduce((t,x)=>t+(x.amountCents||0),0);
+  const byCat={};outs.forEach(x=>byCat[x.category]=(byCat[x.category]||0)+(x.amountCents||0));
   const cats=Object.entries(byCat).sort((a,c)=>c[1]-a[1]);const max=cats[0]?.[1]||1;
   const byDate={};MINE.forEach(x=>(byDate[x.date||'']=byDate[x.date||'']||[]).push(x));
   const dates=Object.keys(byDate).sort().reverse();
   const key=myKey();
   return `<section class="sec">
-    <div class="sec-head"><div><h2>Just me</h2><div class="sub">🔒 Only you can see this. It isn’t shared and doesn’t count in Who owes who.</div></div><button class="btn primary sm" data-act="mine-new">Add</button></div>
-    <div class="tiles"><div class="tile"><div class="l">My spending</div><div class="v">${fmt(total)}</div></div>
-      <div class="tile"><div class="l">Group share</div><div class="v">${fmt(groupShare)}</div></div>
-      <div class="tile"><div class="l">My trip total</div><div class="v">${fmt(total+groupShare)}</div></div></div>
-    ${cash?`<div class="sub">Includes ${fmt(cash)} in ATM withdrawals.</div>`:''}
+    <div class="sec-head"><div><h2>Just me</h2><div class="sub">🔒 Only you can see this. It isn’t shared and doesn’t count in Who owes who.</div></div><div class="btnrow"><button class="btn sm" data-act="mine-in">+ Money in</button><button class="btn primary sm" data-act="mine-new">+ Spent</button></div></div>
+    <div class="tiles"><div class="tile"><div class="l">I spent</div><div class="v">${fmt(total)}</div></div>
+      <div class="tile"><div class="l">Money in</div><div class="v pos">${moneyIn?'+'+fmt(moneyIn):fmt(0)}</div></div>
+      <div class="tile"><div class="l">Net trip cost</div><div class="v">${fmt(net)}</div></div></div>
+    <div class="sub">Net trip cost = your group share <span class="num">${fmt(groupShare)}</span> + what you spent <span class="num">${fmt(total)}</span> − money in <span class="num">${fmt(moneyIn)}</span>.${cash?` Spending includes <span class="num">${fmt(cash)}</span> in ATM withdrawals.`:''}</div>
+    ${gSpent||gWon?`<div class="panel gamb"><b>Gambling</b><span class="small">Played <span class="num">${fmt(gSpent)}</span> · Won <span class="num">${fmt(gWon)}</span></span><span class="pill ${gWon-gSpent>0?'pos':gWon-gSpent<0?'neg':'even'} num">${gWon-gSpent>0?'Up '+fmt(gWon-gSpent):gWon-gSpent<0?'Down '+fmt(gSpent-gWon):'Even'}</span></div>`:''}
   </section>
-  ${cats.length?`<section class="sec"><div class="sec-head"><h2>By category</h2></div><div class="panel bars">${cats.map(([c,v])=>`<div class="bar"><span>${esc(c)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(3,v/max*100)}%;background:${mineColor(c)}"></div></div><span class="num">${fmt(v)}</span></div>`).join('')}</div></section>`:''}
-  ${MINE.length?dates.map(d=>`<section class="sec"><div class="dayhead"><h3>${d?dLong(d):'No date'}</h3><span class="sub num">${fmt(byDate[d].reduce((t,x)=>t+x.amountCents,0))}</span></div><div class="list">${byDate[d].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(x=>`<div class="row" data-act="mine-edit" data-id="${x.id}"><div class="row-main"><span class="row-title">${esc(x.title)}</span><span class="small"><span class="chip"><span class="dot" style="background:${mineColor(x.category)}"></span>${esc(x.category)}</span> ${esc([x.paidWith,x.notes].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(x.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div></section>`).join('')
-   :`<div class="empty"><b>Nothing here yet</b><span>Track what you spend on your own: ATM cash, a snack, drinks at the pool, slots, souvenirs. Only you see it.</span><button class="btn primary" data-act="mine-new">Add your first one</button></div>`}
+  ${cats.length?`<section class="sec"><div class="sec-head"><h2>Spending by category</h2></div><div class="panel bars">${cats.map(([c,v])=>`<div class="bar"><span>${esc(c)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(3,v/max*100)}%;background:${mineColor(c)}"></div></div><span class="num">${fmt(v)}</span></div>`).join('')}</div></section>`:''}
+  ${MINE.length?dates.map(d=>`<section class="sec"><div class="dayhead"><h3>${d?dLong(d):'No date'}</h3><span class="sub num">${fmt(byDate[d].filter(x=>!isIn(x)).reduce((t,x)=>t+x.amountCents,0))} spent</span></div><div class="list">${byDate[d].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(x=>`<div class="row" data-act="mine-edit" data-id="${x.id}"><div class="row-main"><span class="row-title">${esc(x.title)}</span><span class="small"><span class="chip">${isIn(x)?'<span class="dot" style="background:var(--pos)"></span>':`<span class="dot" style="background:${mineColor(x.category)}"></span>`}${esc(x.category)}</span> ${esc([isIn(x)?'':x.paidWith,x.notes].filter(Boolean).join(' · '))}</span></div><span class="row-amt ${isIn(x)?'pos':''}">${isIn(x)?'+':''}${fmt(x.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div></section>`).join('')
+   :`<div class="empty"><b>Nothing here yet</b><span>Track what you spend on your own (ATM cash, snacks, drinks at the pool, slots, souvenirs) and any money that comes in, like winnings. Only you see it.</span><div class="btnrow" style="justify-content:center"><button class="btn primary" data-act="mine-new">+ Spent</button><button class="btn" data-act="mine-in">+ Money in</button></div></div>`}
   <section class="sec"><div class="panel">
     <div class="eyebrow" style="color:var(--muted)">Using another phone?</div>
     <div class="sub" style="margin:4px 0 8px">Your private list is tied to this phone’s private code. To see it on another phone, enter this code there. Keep it to yourself.</div>
@@ -518,26 +528,38 @@ function vMine(){
   </div></section>`;
 }
 function mineColor(c){return `var(--c${(MINE_CATS.indexOf(c)%8+8)%8+1})`}
-function mineForm(id){
-  const x=id?(MINE||[]).find(y=>y.id===id):{category:'Food',date:todayIso(),paidWith:'Cash'};if(!x)return;
-  const me=meId();const cards=me?cardList(me):[];
-  openModal(id?'Edit (just me)':'Add (just me)',`
+function mineForm(id,asIn){
+  const x=id?(MINE||[]).find(y=>y.id===id):(asIn?{type:'in',category:'Gambling winnings',date:todayIso()}:{category:'Food',date:todayIso(),paidWith:'Cash'});if(!x)return;
+  const me=meId();const cards=me?cardList(me):[];const inn=isIn(x);
+  openModal(id?(inn?'Edit money in':'Edit (just me)'):(inn?'Money in':'Spent (just me)'),`
     <p class="sub" style="margin:0">🔒 Only you can see this.</p>
+    <div class="seg" role="group"><button type="button" data-mtype="out" aria-pressed="${!inn}">Money out</button><button type="button" data-mtype="in" aria-pressed="${inn}">Money in</button></div>
+    <input type="hidden" id="m_type" value="${inn?'in':'out'}">
     <div class="two"><div class="f"><label for="m_t">What for?</label><input id="m_t" value="${esc(x.title)}" placeholder="ATM, iced coffee, slots…"></div>
       <div class="f"><label for="m_a">Amount</label><input id="m_a" inputmode="decimal" value="${x.amountCents?(x.amountCents/100).toFixed(2):''}" placeholder="0.00"></div></div>
-    <div class="two"><div class="f"><label for="m_c">Category</label><select id="m_c">${opts(MINE_CATS,x.category)}</select></div><div class="f"><label for="m_d">Date</label><input type="date" id="m_d" value="${esc(x.date)}"></div></div>
-    <div class="f"><label for="m_p">Paid with</label><input id="m_p" list="m_plist" value="${esc(x.paidWith)}" maxlength="40" placeholder="Cash or card name + last 4"><datalist id="m_plist"><option value="Cash">${cards.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
+    <div class="two"><div class="f"><label for="m_c">Category</label><select id="m_c">${opts(inn?MINE_IN_CATS:MINE_CATS,x.category)}</select></div><div class="f"><label for="m_d">Date</label><input type="date" id="m_d" value="${esc(x.date)}"></div></div>
+    <div class="f" id="m_pwrap" ${inn?'hidden':''}><label for="m_p">Paid with</label><input id="m_p" list="m_plist" value="${esc(x.paidWith)}" maxlength="40" placeholder="Cash or card name + last 4"><datalist id="m_plist"><option value="Cash">${cards.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
     <div class="f"><label for="m_n">Notes</label><input id="m_n" value="${esc(x.notes)}" placeholder="Optional, like an ATM fee"></div>`,
   {onSave:async()=>{
     const title=val('m_t'),amt=toCents(val('m_a'));
     if(!title)return 'Say what it was for.';
     if(!(amt>0))return 'Enter the amount, like 20.00.';
     {const ce=cardErr(val('m_p'));if(ce)return ce;}
-    const o={title,amountCents:amt,category:val('m_c'),date:val('m_d'),paidWith:val('m_p'),notes:val('m_n'),createdAt:x.createdAt||Date.now()};
+    const mt=val('m_type');
+    const o={type:mt==='in'?'in':'out',title,amountCents:amt,category:val('m_c'),date:val('m_d'),paidWith:mt==='in'?'':val('m_p'),notes:val('m_n'),createdAt:x.createdAt||Date.now()};
     const nid=id||uid();
     try{await backend.mineSave(nid,o)}catch(e){return tooMany(e)?LOCKED:'That didn’t save. Check your connection and try again.'}
     const a=MINE||[];const i=a.findIndex(y=>y.id===nid);const r={...o,id:nid};i<0?a.push(r):a[i]=r;MINE=a;render();return null;
   },onDelete:id?async()=>{try{await backend.mineDelete(id)}catch(e){return 'Couldn’t delete it. Try again.'}MINE=(MINE||[]).filter(y=>y.id!==id);render();return null}:null});
+}
+function wireMineType(){
+  const f=$('#mform');if(!f||!$('#m_type'))return;
+  f.querySelectorAll('[data-mtype]').forEach(b=>b.addEventListener('click',()=>{
+    const t=b.dataset.mtype;$('#m_type').value=t;f.querySelectorAll('[data-mtype]').forEach(x=>x.setAttribute('aria-pressed',x===b));
+    $('#m_c').innerHTML=opts(t==='in'?MINE_IN_CATS:MINE_CATS,t==='in'?'Gambling winnings':'Food');$('#m_pwrap').hidden=t==='in';
+    const h=$('.sheet h2');if(h)h.textContent=t==='in'?'Money in':'Spent (just me)';
+    $('#m_t').placeholder=t==='in'?'Slots jackpot, cash back…':'ATM, iced coffee, slots…';
+  }));
 }
 function useKeyForm(){
   openModal('Enter a private code',`<p class="sub" style="margin:0">Use the private code from your other phone to see the same private list here. This phone’s current private list stays saved under its old code.</p>
@@ -1001,10 +1023,11 @@ document.addEventListener('click',async ev=>{
     const err=await modalCtx.onDelete();if(err)merr(err);else{closeModal();toast('Deleted')}return}
   if(!t||t.tagName==='SELECT')return;
   if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
-  if(readOnly&&!['copy','filter','pay-new','pay-edit','trip-reopen','girl-breakdown','mine-new','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
+  if(readOnly&&!['copy','filter','pay-new','pay-edit','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
-  if(a==='mine-new')mineForm();
-  else if(a==='mine-edit')mineForm(id);
+  if(a==='mine-new'){mineForm();wireMineType()}
+  else if(a==='mine-in'){mineForm(null,true);wireMineType()}
+  else if(a==='mine-edit'){mineForm(id);wireMineType()}
   else if(a==='mine-copykey')copyText(prettyKey(myKey()),'Your private code','Private code copied');
   else if(a==='mine-usekey')useKeyForm();
   else if(a==='girl-breakdown')breakdown(id);
