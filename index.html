@@ -152,10 +152,12 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .editlink{display:block;font-family:var(--body);font-size:12px;font-weight:700;color:var(--accent);margin-top:2px}
 .btnrow{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .charges{display:grid;gap:4px;margin-top:4px}
+.plancharges{grid-column:1/-1;min-width:0}
+.plancharges .charges{margin-top:0}
 .charge{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--sunk);border-radius:10px;padding:7px 10px;cursor:pointer;font-size:14px}
 .charge:hover{border-color:var(--accent)}
 .charge .editlink{margin:0}
-.charge-t{min-width:0;overflow-wrap:anywhere}
+.charge-t{min-width:0;overflow-wrap:break-word}
 .hotelcard{display:grid;gap:12px}
 .who{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .tap{cursor:pointer}
@@ -546,10 +548,10 @@ function vPlans(){
       <div class="row-main"><span class="row-title">${esc(p.title)}</span>
         <span class="small">${esc([p.location,p.confirmation&&'Conf # '+p.confirmation,p.cost&&p.cost+' per person'].filter(Boolean).join(' · '))}</span>
         ${(p.going||[]).filter(girl).length?`<span class="small"><b>Going:</b> ${esc((p.going||[]).filter(girl).map(gname).sort((a,b)=>a.localeCompare(b)).join(', '))}</span>`:'<span class="small">Nobody marked as going yet</span>'}
-        ${p.notes?`<span class="small">${esc(p.notes)}</span>`:''}
-        ${chargeList('plan',p.id)}</div>
+        ${p.notes?`<span class="small">${esc(p.notes)}</span>`:''}</div>
       <div style="display:grid;gap:6px;justify-items:end"><span class="chip">${esc(p.kind||'Plan')}</span>${(p.going||[]).filter(girl).length?`<span class="stack">${(p.going||[]).filter(girl).map(id=>av(id,'xs')).join('')}</span>`:''}
         <div class="btnrow"><button class="btn sm" data-act="plan-edit" data-id="${p.id}">Edit</button><button class="btn sm" data-act="plan-charge" data-id="${p.id}">Add cost</button></div></div>
+      ${linkedTotal('plan',p.id)?`<div class="plancharges">${chargeList('plan',p.id)}</div>`:''}
     </div>`;
   const stay=(h,kind)=>`<div class="plan" data-act="hotel-edit" data-id="${h.id}">
       <span class="time">${esc(kind==='in'?(h.checkInTime||'Check-in'):(h.checkOutTime||'Check-out'))}</span>
