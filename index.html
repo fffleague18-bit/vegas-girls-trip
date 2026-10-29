@@ -192,6 +192,9 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .quick{display:inline-flex;gap:14px}
 .quick .linkbtn{font-size:13px}
 .archived{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.sharepanel{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.sharepanel .code{font-size:26px;font-weight:600;letter-spacing:.12em;margin:2px 0 4px;overflow-wrap:anywhere}
+.sharebtns{display:flex;gap:8px;flex-wrap:wrap}
 .endpanel{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .tripgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
 .tripcard{display:grid;gap:4px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;cursor:pointer}
@@ -456,7 +459,13 @@ function vTrip(){
       ${(g.cards||'').trim()?`<div class="chips">${g.cards.split(',').map(c=>c.trim()).filter(Boolean).map(c=>`<span class="chip">${esc(c)}</span>`).join('')}</div>`:''}
       <div class="small">Paid so far <span class="num">${fmt(b[g.id]?.paid)}</span></div>
     </button>`}).join('')}</div>`:`<div class="empty"><b>Who’s coming?</b><span>Each girl is added automatically when she signs in. You can also add someone yourself.</span><button class="btn primary" data-act="girl-new">Add a girl</button></div>`;
-  return `
+  const share=ACTIVE&&ACTIVE.code?`<section class="sec"><div class="panel sharepanel">
+      <div><div class="eyebrow" style="color:var(--muted)">Share this trip</div>
+        <div class="code num">${esc(ACTIVE.code.toUpperCase())}</div>
+        <div class="sub">Send this passcode only to the girls on this trip. Anyone with it can see and edit the trip.</div></div>
+      <div class="sharebtns"><button class="btn primary sm" data-act="copy-invite">Copy invite</button><button class="btn sm" data-act="copy-code">Copy passcode</button></div>
+    </div></section>`:'';
+  return `${share}
   <section class="sec"><div class="sec-head"><div><h2>The girls</h2><div class="sub">Everyone shows up here when they join.</div></div>${S.girls.length?'<button class="btn sm" data-act="girl-new">Add girl</button>':''}</div>${girls}</section>
   <section class="sec"><div class="sec-head"><div><h2>Hotels</h2><div class="sub">Hotel costs split only between the girls staying there.</div></div>${S.hotels.length?'<button class="btn primary sm" data-act="hotel-new">Add hotel</button>':''}</div>${hotels}</section>
   <section class="sec"><div class="sec-head"><h2>Trip details</h2><button class="btn sm" data-act="trip-edit">Edit</button></div>
@@ -636,6 +645,21 @@ function hotelForm(id){
   },onDelete:id?async()=>linked?`${linked} charge${linked===1?' is':'s are'} linked to this hotel. Delete those or change what they’re for first.`:write(()=>backend.remove('hotels',id)):null});
 }
 
+function inviteText(){
+  const code=(ACTIVE&&ACTIVE.code||'').toUpperCase();const url=location.origin+'/';
+  return `${S.trip.name||'Our trip'}! Here’s our trip app for plans, hotels, rides and who paid for what, so at the end we know who owes who.
+
+1. Open ${url} in Safari (iPhone) or Chrome (Android).
+2. Add it to your home screen: iPhone tap Share then “Add to Home Screen”. Android tap ⋮ then “Add to Home screen”.
+3. Open the app from your home screen and tap “Join a trip with a passcode”.
+4. Passcode: ${code}
+5. Pick your name (or add yourself), add your Venmo and card names with the last 4 digits only, and tap “That’s me”.`;
+}
+async function copyShare(full){
+  const txt=full?inviteText():(ACTIVE&&ACTIVE.code||'').toUpperCase();
+  try{await navigator.clipboard.writeText(txt);toast(full?'Invite copied. Paste it in the group text.':'Passcode copied')}
+  catch(e){openModal(full?'Invite for the girls':'Trip passcode',`<div class="f"><textarea id="sharetxt" style="min-height:${full?260:60}px">${esc(txt)}</textarea><span class="hint">Select all and copy.</span></div>`,{onSave:async()=>null,saveLabel:'Done'});setTimeout(()=>$('#sharetxt').select(),50)}
+}
 function endTripForm(){
   const owed=transfers(balances());
   openModal('End this trip?',`
@@ -827,6 +851,7 @@ document.addEventListener('click',async ev=>{
   if(ev.target.id==='mdel'){const b=ev.target;if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Tap again to delete';return}
     const err=await modalCtx.onDelete();if(err)merr(err);else{closeModal();toast('Deleted')}return}
   if(!t||t.tagName==='SELECT')return;
+  if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
   if(readOnly&&!['copy','filter','pay-new','pay-edit','trip-reopen'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
   if(a==='trip-end')endTripForm();
