@@ -1,6 +1,6 @@
 {
-  "name": "Vegas Girls Trip",
-  "short_name": "Vegas Trip",
+  "name": "Girls Trip",
+  "short_name": "Girls Trip",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
