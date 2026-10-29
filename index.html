@@ -268,7 +268,11 @@ const PLAN_CAT={Show:'Shows & tickets',Dinner:'Food',Brunch:'Food',Lunch:'Food',
 const CATS=['Hotel','Food','Drinks','Shows & tickets','Clubs & cover','Ride share','Pool & spa','Shopping','Gambling','Flights','Tips','Other'];
 const PLAN_KINDS=['Show','Brunch','Lunch','Dinner','Bar','Club','Pool party','Spa','Shopping','Tour','Drinks','Flight','Other'];
 const RIDE_SERVICES=['Uber','Lyft','Taxi','Hotel shuttle','Other'];
-const TABS=[['trip','Trip & girls'],['plans','Calendar'],['expenses','Expenses'],['rides','Rides'],['settle','Who owes who']];
+const TABS=[['trip','Trip & girls'],['plans','Calendar'],['expenses','Expenses'],['rides','Rides'],['settle','Who owes who'],['mine','Just me']];
+const MINE_CATS=['Food','Drinks','Snacks','ATM withdrawal','Gambling','Shopping','Tips','Ride share','Spa & beauty','Souvenirs','Other'];
+let MINE=null,mineLoading=false;
+function myKey(){if(!ACTIVE)return 'local-device-key-000000';const k='tripbook-mykey:'+ACTIVE.id;let v=lsGet(k);if(!v){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';v=Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>a[b%a.length]).join('');lsSet(k,v)}return v}
+const prettyKey=k=>k.match(/.{1,4}/g).join('-');
 let tab='trip', backend=null, filterGirl='', readOnly=false;
 
 /* ---------- helpers ---------- */
@@ -341,7 +345,10 @@ function localBackend(){
     shared:false,
     start(){try{const d=JSON.parse(localStorage.getItem(KEY)||'null');if(d)Object.assign(S,d)}catch(e){}S.hotels=S.hotels||[];S.loaded=true;render()},
     async save(col,id,obj){if(col==='trip'){S.trip=obj}else{const a=S[col],i=a.findIndex(x=>x.id===id);const r={...obj,id};i<0?a.push(r):a[i]=r}persist();render()},
-    async remove(col,id){S[col]=S[col].filter(x=>x.id!==id);persist();render()}
+    async remove(col,id){S[col]=S[col].filter(x=>x.id!==id);persist();render()},
+    async mineLoad(){try{return JSON.parse(localStorage.getItem('tripbook-mine-local')||'[]')}catch(e){return []}},
+    async mineSave(id,obj){const a=await this.mineLoad();const i=a.findIndex(x=>x.id===id);const r={...obj,id};i<0?a.push(r):a[i]=r;try{localStorage.setItem('tripbook-mine-local',JSON.stringify(a))}catch(e){}},
+    async mineDelete(id){const a=(await this.mineLoad()).filter(x=>x.id!==id);try{localStorage.setItem('tripbook-mine-local',JSON.stringify(a))}catch(e){}}
   };
 }
 /* Supabase table: trip_items (trip_id, id, kind, data, updated_at). One row per girl/expense/plan/payment, plus one 'trip' row. */
@@ -384,6 +391,9 @@ function supaBackend(sb,TRIP,code){
       if(col==='trip')upsertTrip({id:TRIP,name:obj.name||'',destination:obj.destination||'',startDate:obj.startDate||'',endDate:obj.endDate||'',status:obj.status||''});
       render();
     },
+    async mineLoad(){const {data,error}=await sb.rpc('mine_load',{p_trip:TRIP,p_code:code,p_key:myKey()});if(error)throw error;return (data||[]).map(r=>({...(r.data||{}),id:r.id}))},
+    async mineSave(id,obj){const {data:r,error}=await sb.rpc('mine_save',{p_trip:TRIP,p_code:code,p_key:myKey(),p_id:id,p_data:obj});if(error)throw error;if(r!=='ok')throw {code:'28P01',message:'wrong passcode'}},
+    async mineDelete(id){const {data:r,error}=await sb.rpc('mine_delete',{p_trip:TRIP,p_code:code,p_key:myKey(),p_id:id});if(error)throw error;if(r!=='ok')throw {code:'28P01',message:'wrong passcode'}},
     async saveBanner(img){
       const at=img?String(Date.now()):'';
       if(img){const {data:r,error}=await sb.rpc('trip_save',{p_trip:TRIP,p_code:code,p_id:'banner:main',p_kind:'banner',p_data:{img}});if(error)throw error;if(r==='bad-passcode')throw {code:'28P01'}}
@@ -473,7 +483,69 @@ function render(){
   const m=$('#main');
   if(!S.loaded){m.innerHTML=`<div class="empty"><b>Loading the trip…</b></div>`;return}
   const banner=isEnded()?`<div class="archived"><div><b>This trip has ended${S.trip.endedAt?' ('+esc(dLong(S.trip.endedAt))+')':''}.</b> It’s in the Archive, so it’s view only. You can still mark paybacks under Who owes who.</div><button class="btn sm" data-act="trip-reopen">Reopen trip</button></div>`:'';
-  m.innerHTML=banner+{trip:vTrip,plans:vPlans,expenses:vExpenses,rides:vRides,settle:vSettle}[tab]();
+  m.innerHTML=banner+{trip:vTrip,plans:vPlans,expenses:vExpenses,rides:vRides,settle:vSettle,mine:vMine}[tab]();
+}
+
+async function loadMine(){
+  if(!backend||!backend.mineLoad||mineLoading)return;mineLoading=true;
+  try{MINE=await backend.mineLoad()}catch(e){MINE=MINE||[];toast(tooMany(e)?LOCKED:'Couldn’t load your private list. Check your connection.')}
+  mineLoading=false;if(tab==='mine')render();
+}
+function vMine(){
+  if(MINE===null){loadMine();return `<section class="sec"><div class="sec-head"><h2>Just me</h2></div><div class="empty"><b>Loading your private list…</b></div></section>`}
+  const me=meId();const groupShare=me?S.expenses.reduce((t,e)=>t+(shares(e)[me]||0),0):0;
+  const total=MINE.reduce((t,x)=>t+(x.amountCents||0),0);
+  const cash=MINE.filter(x=>x.category==='ATM withdrawal').reduce((t,x)=>t+(x.amountCents||0),0);
+  const byCat={};MINE.forEach(x=>byCat[x.category]=(byCat[x.category]||0)+(x.amountCents||0));
+  const cats=Object.entries(byCat).sort((a,c)=>c[1]-a[1]);const max=cats[0]?.[1]||1;
+  const byDate={};MINE.forEach(x=>(byDate[x.date||'']=byDate[x.date||'']||[]).push(x));
+  const dates=Object.keys(byDate).sort().reverse();
+  const key=myKey();
+  return `<section class="sec">
+    <div class="sec-head"><div><h2>Just me</h2><div class="sub">🔒 Only you can see this. It isn’t shared and doesn’t count in Who owes who.</div></div><button class="btn primary sm" data-act="mine-new">Add</button></div>
+    <div class="tiles"><div class="tile"><div class="l">My spending</div><div class="v">${fmt(total)}</div></div>
+      <div class="tile"><div class="l">Group share</div><div class="v">${fmt(groupShare)}</div></div>
+      <div class="tile"><div class="l">My trip total</div><div class="v">${fmt(total+groupShare)}</div></div></div>
+    ${cash?`<div class="sub">Includes ${fmt(cash)} in ATM withdrawals.</div>`:''}
+  </section>
+  ${cats.length?`<section class="sec"><div class="sec-head"><h2>By category</h2></div><div class="panel bars">${cats.map(([c,v])=>`<div class="bar"><span>${esc(c)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(3,v/max*100)}%;background:${mineColor(c)}"></div></div><span class="num">${fmt(v)}</span></div>`).join('')}</div></section>`:''}
+  ${MINE.length?dates.map(d=>`<section class="sec"><div class="dayhead"><h3>${d?dLong(d):'No date'}</h3><span class="sub num">${fmt(byDate[d].reduce((t,x)=>t+x.amountCents,0))}</span></div><div class="list">${byDate[d].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(x=>`<div class="row" data-act="mine-edit" data-id="${x.id}"><div class="row-main"><span class="row-title">${esc(x.title)}</span><span class="small"><span class="chip"><span class="dot" style="background:${mineColor(x.category)}"></span>${esc(x.category)}</span> ${esc([x.paidWith,x.notes].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(x.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div></section>`).join('')
+   :`<div class="empty"><b>Nothing here yet</b><span>Track what you spend on your own: ATM cash, a snack, drinks at the pool, slots, souvenirs. Only you see it.</span><button class="btn primary" data-act="mine-new">Add your first one</button></div>`}
+  <section class="sec"><div class="panel">
+    <div class="eyebrow" style="color:var(--muted)">Using another phone?</div>
+    <div class="sub" style="margin:4px 0 8px">Your private list is tied to this phone’s private code. To see it on another phone, enter this code there. Keep it to yourself.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="num" style="font-weight:600;letter-spacing:.06em">${esc(prettyKey(key))}</span><button class="btn sm" data-act="mine-copykey">Copy</button><button class="btn sm" data-act="mine-usekey">Enter a private code</button></div>
+  </div></section>`;
+}
+function mineColor(c){return `var(--c${(MINE_CATS.indexOf(c)%8+8)%8+1})`}
+function mineForm(id){
+  const x=id?(MINE||[]).find(y=>y.id===id):{category:'Food',date:todayIso(),paidWith:'Cash'};if(!x)return;
+  const me=meId();const cards=me?cardList(me):[];
+  openModal(id?'Edit (just me)':'Add (just me)',`
+    <p class="sub" style="margin:0">🔒 Only you can see this.</p>
+    <div class="two"><div class="f"><label for="m_t">What for?</label><input id="m_t" value="${esc(x.title)}" placeholder="ATM, iced coffee, slots…"></div>
+      <div class="f"><label for="m_a">Amount</label><input id="m_a" inputmode="decimal" value="${x.amountCents?(x.amountCents/100).toFixed(2):''}" placeholder="0.00"></div></div>
+    <div class="two"><div class="f"><label for="m_c">Category</label><select id="m_c">${opts(MINE_CATS,x.category)}</select></div><div class="f"><label for="m_d">Date</label><input type="date" id="m_d" value="${esc(x.date)}"></div></div>
+    <div class="f"><label for="m_p">Paid with</label><input id="m_p" list="m_plist" value="${esc(x.paidWith)}" maxlength="40" placeholder="Cash or card name + last 4"><datalist id="m_plist"><option value="Cash">${cards.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
+    <div class="f"><label for="m_n">Notes</label><input id="m_n" value="${esc(x.notes)}" placeholder="Optional, like an ATM fee"></div>`,
+  {onSave:async()=>{
+    const title=val('m_t'),amt=toCents(val('m_a'));
+    if(!title)return 'Say what it was for.';
+    if(!(amt>0))return 'Enter the amount, like 20.00.';
+    {const ce=cardErr(val('m_p'));if(ce)return ce;}
+    const o={title,amountCents:amt,category:val('m_c'),date:val('m_d'),paidWith:val('m_p'),notes:val('m_n'),createdAt:x.createdAt||Date.now()};
+    const nid=id||uid();
+    try{await backend.mineSave(nid,o)}catch(e){return tooMany(e)?LOCKED:'That didn’t save. Check your connection and try again.'}
+    const a=MINE||[];const i=a.findIndex(y=>y.id===nid);const r={...o,id:nid};i<0?a.push(r):a[i]=r;MINE=a;render();return null;
+  },onDelete:id?async()=>{try{await backend.mineDelete(id)}catch(e){return 'Couldn’t delete it. Try again.'}MINE=(MINE||[]).filter(y=>y.id!==id);render();return null}:null});
+}
+function useKeyForm(){
+  openModal('Enter a private code',`<p class="sub" style="margin:0">Use the private code from your other phone to see the same private list here. This phone’s current private list stays saved under its old code.</p>
+    <div class="f"><label for="k_code">Private code</label><input id="k_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.06em;text-transform:uppercase"></div>`,
+  {saveLabel:'Use this code',onSave:async()=>{
+    const k=val('k_code').toUpperCase().replace(/[^A-Z0-9]/g,'');if(k.length<20)return 'That code looks too short. Copy the whole thing.';
+    lsSet('tripbook-mykey:'+ACTIVE.id,k);MINE=null;setTimeout(()=>render(),30);return null;
+  }});
 }
 
 function needGirls(){return `<div class="empty"><b>Add the girls first</b><span>Everyone who’s splitting costs needs to be on the list.</span><button class="btn primary" data-act="girl-new">Add a girl</button></div>`}
@@ -929,9 +1001,13 @@ document.addEventListener('click',async ev=>{
     const err=await modalCtx.onDelete();if(err)merr(err);else{closeModal();toast('Deleted')}return}
   if(!t||t.tagName==='SELECT')return;
   if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
-  if(readOnly&&!['copy','filter','pay-new','pay-edit','trip-reopen','girl-breakdown'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
+  if(readOnly&&!['copy','filter','pay-new','pay-edit','trip-reopen','girl-breakdown','mine-new','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
-  if(a==='girl-breakdown')breakdown(id);
+  if(a==='mine-new')mineForm();
+  else if(a==='mine-edit')mineForm(id);
+  else if(a==='mine-copykey')copyText(prettyKey(myKey()),'Your private code','Private code copied');
+  else if(a==='mine-usekey')useKeyForm();
+  else if(a==='girl-breakdown')breakdown(id);
   else if(a==='trip-end')endTripForm();
   else if(a==='trip-reopen'){const err=await write(()=>backend.save('trip','main',{...S.trip,status:'',endedAt:''}));toast(err||'Trip reopened')}
   else if(a==='trip-edit')tripForm();
