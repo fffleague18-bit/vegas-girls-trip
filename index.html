@@ -158,6 +158,9 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .charge-t{min-width:0;overflow-wrap:anywhere}
 .hotelcard{display:grid;gap:12px}
 .who{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tap{cursor:pointer}
+.tap:hover td{background:var(--sunk)}
+.namelink{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .allset{background:var(--pos-soft);color:var(--pos);border-radius:var(--r);padding:14px 16px;font-weight:600}
 
 /* Modal */
@@ -571,7 +574,7 @@ function vSettle(){
   if(!S.girls.length)return `<section class="sec"><div class="sec-head"><h2>Who owes who</h2></div>${needGirls()}</section>`;
   const b=balances();const xs=transfers(b);
   const rows=sortedGirls().map(g=>{const r=b[g.id];const n=r.net;
-    return `<tr><td><span style="display:inline-flex;align-items:center;gap:8px">${av(g.id,'xs')}<b>${esc(g.name)}</b></span></td><td class="n">${fmt(r.paid)}</td><td class="n">${fmt(r.share)}</td><td class="n">${fmt(r.sent-r.recv)}</td>
+    return `<tr class="tap" data-act="girl-breakdown" data-id="${g.id}"><td><span style="display:inline-flex;align-items:center;gap:8px">${av(g.id,'xs')}<b class="namelink">${esc(g.name)}</b></span></td><td class="n">${fmt(r.paid)}</td><td class="n">${fmt(r.share)}</td><td class="n">${fmt(r.sent-r.recv)}</td>
       <td>${n>0?`<span class="pill pos num">gets ${fmt(n)}</span>`:n<0?`<span class="pill neg num">owes ${fmt(-n)}</span>`:'<span class="pill even">even</span>'}</td></tr>`}).join('');
   const byCard={};S.expenses.forEach(e=>{const k=(e.card||'Card not noted').trim()+'|'+e.paidBy;byCard[k]=(byCard[k]||0)+e.amountCents});
   const cardRows=Object.entries(byCard).sort((a,c)=>c[1]-a[1]);
@@ -586,7 +589,7 @@ function vSettle(){
   </section>
   <section class="sec"><div class="sec-head"><h2>Balances</h2></div>
     <div class="table-wrap"><table><thead><tr><th>Girl</th><th>Paid</th><th>Her share</th><th>Settled</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="sub">Paid = what she put on her cards for the group. Her share = what she used. Settled = money she’s already sent back (minus what she’s received).</div>
+    <div class="sub">Tap a name to see her full trip breakdown. Paid = what she put on her cards for the group. Her share = what she used. Settled = money she’s already sent back (minus what she’s received).</div>
   </section>
   <section class="sec"><div class="sec-head"><h2>Payments made</h2><button class="btn sm" data-act="pay-new">Record payment</button></div>
     ${S.payments.length?`<div class="list">${[...S.payments].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(p=>`<div class="row" data-act="pay-edit" data-id="${p.id}"><div class="row-main"><span class="row-title">${esc(gname(p.from))} paid ${esc(gname(p.to))}</span><span class="small">${esc([p.method,p.date&&dLong(p.date)].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(p.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div>`:'<div class="sub">When someone pays another girl back, tap Mark paid so balances stay right.</div>'}
@@ -666,6 +669,23 @@ async function copyShare(full){
   const txt=full?inviteText():(ACTIVE&&ACTIVE.code||'').toUpperCase();
   try{await navigator.clipboard.writeText(txt);toast(full?'Invite copied. Paste it in the group text.':'Passcode copied')}
   catch(e){openModal(full?'Invite for the girls':'Trip passcode',`<div class="f"><textarea id="sharetxt" style="min-height:${full?260:60}px">${esc(txt)}</textarea><span class="hint">Select all and copy.</span></div>`,{onSave:async()=>null,saveLabel:'Done'});setTimeout(()=>$('#sharetxt').select(),50)}
+}
+function breakdown(id){
+  const g=girl(id);if(!g)return;
+  const b=balances()[id]||{paid:0,share:0,sent:0,recv:0,net:0};
+  const items=S.expenses.map(e=>({e,mine:shares(e)[id]||0})).filter(x=>x.mine>0).sort((a,c)=>(a.e.date||'').localeCompare(c.e.date||'')||(a.e.createdAt||0)-(c.e.createdAt||0));
+  const byCat={};items.forEach(x=>byCat[x.e.category]=(byCat[x.e.category]||0)+x.mine);
+  const cats=Object.entries(byCat).sort((a,c)=>c[1]-a[1]);const max=cats[0]?.[1]||1;
+  const paidFor=S.expenses.filter(e=>e.paidBy===id);
+  const status=b.net>0?`<span class="pill pos num">gets back ${fmt(b.net)}</span>`:b.net<0?`<span class="pill neg num">owes ${fmt(-b.net)}</span>`:'<span class="pill even">even</span>';
+  openModal(g.name+'’s trip',`
+    <div class="tiles"><div class="tile"><div class="l">Trip total</div><div class="v">${fmt(b.share)}</div></div><div class="tile"><div class="l">She paid</div><div class="v">${fmt(b.paid)}</div></div><div class="tile"><div class="l">Status</div><div style="margin-top:4px">${status}</div></div></div>
+    ${cats.length?`<div class="f"><span class="lbl">By category</span><div class="bars">${cats.map(([c,v])=>`<div class="bar"><span>${esc(c)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(3,v/max*100)}%;background:${catColor(c)}"></div></div><span class="num">${fmt(v)}</span></div>`).join('')}</div></div>`:'<div class="sub">She isn’t included in any expenses yet.</div>'}
+    ${items.length?`<div class="f"><span class="lbl">Everything she’s in (${items.length})</span><div class="list">${items.map(x=>`<div class="row" style="cursor:default"><div class="row-main"><span class="row-title">${esc(x.e.title)}</span><span class="small">${esc([x.e.date&&dShort(x.e.date),x.e.category,linkName(x.e)].filter(Boolean).join(' · '))}${x.mine!==x.e.amountCents?` · her part of ${fmt(x.e.amountCents)}`:''}</span></div><span class="row-amt">${fmt(x.mine)}</span></div>`).join('')}
+      <div class="row" style="cursor:default;background:var(--sunk)"><div class="row-main"><span class="row-title">Trip total</span></div><span class="row-amt">${fmt(b.share)}</span></div></div></div>`:''}
+    ${paidFor.length?`<div class="f"><span class="lbl">She paid for</span><div class="list">${paidFor.map(e=>`<div class="row" style="cursor:default"><div class="row-main"><span class="row-title">${esc(e.title)}</span><span class="small">${esc([e.date&&dShort(e.date),e.card].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(e.amountCents)}</span></div>`).join('')}</div></div>`:''}`,
+  {saveLabel:'Done',onSave:async()=>null});
+  const c=$('#mcancel');if(c)c.hidden=true;
 }
 function endTripForm(){
   const owed=transfers(balances());
@@ -859,9 +879,10 @@ document.addEventListener('click',async ev=>{
     const err=await modalCtx.onDelete();if(err)merr(err);else{closeModal();toast('Deleted')}return}
   if(!t||t.tagName==='SELECT')return;
   if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
-  if(readOnly&&!['copy','filter','pay-new','pay-edit','trip-reopen'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
+  if(readOnly&&!['copy','filter','pay-new','pay-edit','trip-reopen','girl-breakdown'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
-  if(a==='trip-end')endTripForm();
+  if(a==='girl-breakdown')breakdown(id);
+  else if(a==='trip-end')endTripForm();
   else if(a==='trip-reopen'){const err=await write(()=>backend.save('trip','main',{...S.trip,status:'',endedAt:''}));toast(err||'Trip reopened')}
   else if(a==='trip-edit')tripForm();
   else if(a==='girl-new')girlForm();
