@@ -387,7 +387,8 @@ function balances(){
   const b={};sortedGirls().forEach(g=>b[g.id]={paid:0,share:0,sent:0,recv:0});
   const ensure=id=>b[id]||(b[id]={paid:0,share:0,sent:0,recv:0});
   S.expenses.forEach(e=>{ensure(e.paidBy).paid+=e.amountCents||0;const sh=shares(e);for(const k in sh)ensure(k).share+=sh[k]});
-  S.payments.forEach(p=>{ensure(p.from).sent+=p.amountCents||0;ensure(p.to).recv+=p.amountCents||0});
+  S.payments.forEach(p=>{ensure(p.from).sent+=p.amountCents||0;ensure(p.to).recv+=p.amountCents||0;
+    if(p.kind==='loan'){ensure(p.from).lent=(b[p.from].lent||0)+(p.amountCents||0);ensure(p.to).borrowed=(b[p.to].borrowed||0)+(p.amountCents||0)}});
   for(const k in b)b[k].net=b[k].paid-b[k].share+b[k].sent-b[k].recv;
   return b;
 }
@@ -778,14 +779,14 @@ function vSettle(){
   if(!S.girls.length)return `<section class="sec"><div class="sec-head"><h2>Who owes who</h2></div>${needGirls()}</section>`;
   const b=balances();const xs=transfers(b);
   const rows=sortedGirls().map(g=>{const r=b[g.id];const n=r.net;
-    return `<tr class="tap" data-act="girl-breakdown" data-id="${g.id}"><td><span style="display:inline-flex;align-items:center;gap:8px">${av(g.id,'xs')}<b class="namelink">${esc(g.name)}</b></span></td><td class="n">${fmt(r.paid)}</td><td class="n">${fmt(r.share)}</td><td class="n">${fmt(r.sent-r.recv)}</td>
+    return `<tr class="tap" data-act="girl-breakdown" data-id="${g.id}"><td><span style="display:inline-flex;align-items:center;gap:8px">${av(g.id,'xs')}<b class="namelink">${esc(g.name)}</b></span>${r.lent||r.borrowed?`<div class="small">${[r.lent&&'lent '+fmt(r.lent),r.borrowed&&'borrowed '+fmt(r.borrowed)].filter(Boolean).join(' · ')}</div>`:''}</td><td class="n">${fmt(r.paid)}</td><td class="n">${fmt(r.share)}</td><td class="n">${fmt((r.sent-(r.lent||0))-(r.recv-(r.borrowed||0)))}</td>
       <td>${n>0?`<span class="pill pos num">gets ${fmt(n)}</span>`:n<0?`<span class="pill neg num">owes ${fmt(-n)}</span>`:'<span class="pill even">even</span>'}</td></tr>`}).join('');
   const byCard={};S.expenses.forEach(e=>{const k=(e.card||'Card not noted').trim()+'|'+e.paidBy;byCard[k]=(byCard[k]||0)+e.amountCents});
   const cardRows=Object.entries(byCard).sort((a,c)=>c[1]-a[1]);
   const byCat={};S.expenses.forEach(e=>byCat[e.category]=(byCat[e.category]||0)+e.amountCents);
   const cats=Object.entries(byCat).sort((a,c)=>c[1]-a[1]);const max=cats[0]?.[1]||1;
   return `<section class="sec">
-    <div class="sec-head"><div><h2>Who owes who</h2><div class="sub">The fewest payments that make everyone even.</div></div><div class="btnrow"><button class="btn sm" data-act="wrapped">🎁 Trip Wrapped</button><button class="btn sm" data-act="copy">Copy summary</button></div></div>
+    <div class="sec-head"><div><h2>Who owes who</h2><div class="sub">The fewest payments that make everyone even.</div></div><div class="btnrow"><button class="btn sm" data-act="loan-new">💵 Lend money</button><button class="btn sm" data-act="wrapped">🎁 Trip Wrapped</button><button class="btn sm" data-act="copy">Copy summary</button></div></div>
     ${!S.expenses.length?`<div class="empty"><b>Nothing to settle yet</b><span>Once expenses are logged, this shows exactly who sends money to whom.</span></div>`:
     xs.length?`<div class="list">${xs.map(x=>{const to=girl(x.to);return `<div class="xfer"><div class="xfer-who">${av(x.from,'xs')}<b>${esc(gname(x.from))}</b><span class="arrow">pays</span>${av(x.to,'xs')}<b>${esc(gname(x.to))}</b></div>
       <div style="display:flex;align-items:center;gap:10px"><span class="xfer-amt num">${fmt(x.amt)}</span><button class="btn sm" data-act="pay-new" data-from="${x.from}" data-to="${x.to}" data-amt="${x.amt}">Mark paid</button></div>
@@ -794,10 +795,10 @@ function vSettle(){
   </section>
   <section class="sec"><div class="sec-head"><h2>Balances</h2></div>
     <div class="table-wrap"><table><thead><tr><th>Girl</th><th>Paid</th><th>Her share</th><th>Settled</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="sub">Tap a name to see her full trip breakdown. Paid = what she put on her cards for the group. Her share = what she used. Settled = money she’s already sent back (minus what she’s received).</div>
+    <div class="sub">Tap a name to see her full trip breakdown. Paid = what she put on her cards for the group. Her share = what she used. Settled = money she’s already sent back (minus what she’s received). Loans are counted in her status.</div>
   </section>
-  <section class="sec"><div class="sec-head"><h2>Payments made</h2><button class="btn sm" data-act="pay-new">Record payment</button></div>
-    ${S.payments.length?`<div class="list">${[...S.payments].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(p=>`<div class="row" data-act="pay-edit" data-id="${p.id}"><div class="row-main"><span class="row-title">${esc(gname(p.from))} paid ${esc(gname(p.to))}${p.kind==='deposit'?' (deposit)':''}</span><span class="small">${esc([p.method,p.date&&dLong(p.date)].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(p.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div>`:'<div class="sub">When someone pays another girl back, tap Mark paid so balances stay right.</div>'}
+  <section class="sec"><div class="sec-head"><h2>Payments & loans</h2><div class="btnrow"><button class="btn sm" data-act="loan-new">Lend money</button><button class="btn sm" data-act="pay-new">Record payment</button></div></div>
+    ${S.payments.length?`<div class="list">${[...S.payments].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(p=>`<div class="row" data-act="pay-edit" data-id="${p.id}"><div class="row-main"><span class="row-title">${p.kind==='loan'?`💵 ${esc(gname(p.from))} lent ${esc(gname(p.to))}`:`${esc(gname(p.from))} paid ${esc(gname(p.to))}${p.kind==='deposit'?' (deposit)':''}`}</span><span class="small">${esc([p.kind==='loan'?p.note:p.method,p.date&&dLong(p.date)].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(p.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div>`:'<div class="sub">When someone pays another girl back, tap Mark paid. If someone spots a friend cash, tap Lend money.</div>'}
   </section>
   ${cardRows.length?`<section class="sec"><div class="sec-head"><h2>By credit card</h2></div><div class="list">${cardRows.map(([k,v])=>{const[c,id]=k.split('|');return `<div class="row" style="cursor:default"><div class="row-main"><span class="row-title">${esc(c)}</span><span class="small">${esc(gname(id))}</span></div><span class="row-amt">${fmt(v)}</span></div>`}).join('')}</div></section>`:''}
   ${cats.length?`<section class="sec"><div class="sec-head"><h2>Where the money went</h2></div><div class="panel bars">${cats.map(([c,v])=>`<div class="bar"><span>${esc(c)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(2,v/max*100)}%;background:${catColor(c)}"></div></div><span class="num">${fmt(v)}</span></div>`).join('')}</div></section>`:''}`;
@@ -1231,6 +1232,23 @@ function planForm(id,date){
   },onDelete:id?async()=>linked?`${linked} cost${linked===1?' is':'s are'} linked to this plan. Delete those or change what they’re for first.`:write(()=>backend.remove('plans',id)):null});
 }
 
+function loanForm(id){
+  const me=meId();const others=sortedGirls().filter(g=>g.id!==me);
+  const p=id?S.payments.find(x=>x.id===id):{from:others[0]?.id,to:me||sortedGirls()[0]?.id,date:todayIso(),note:'Cash'};
+  openModal(id?'Edit loan':'💵 Lend money',`
+    <p class="sub" style="margin:0">Someone spotted a friend? Log it here and it’s added to Who owes who, so it gets paid back when you settle up.</p>
+    <div class="two"><div class="f"><label for="l_f">Who lent it</label><select id="l_f">${girlOpts(p.from)}</select></div><div class="f"><label for="l_t">Who borrowed it</label><select id="l_t">${girlOpts(p.to)}</select></div></div>
+    <div class="two"><div class="f"><label for="l_a">Amount</label><input id="l_a" inputmode="decimal" value="${p.amountCents?(p.amountCents/100).toFixed(2):''}" placeholder="40.00"></div><div class="f"><label for="l_d">Date</label><input type="date" id="l_d" value="${esc(p.date)}"></div></div>
+    <div class="f"><label for="l_n">What for?</label><input id="l_n" value="${esc(p.note)}" list="l_nl" maxlength="60" placeholder="Cash at the slots"><datalist id="l_nl"><option value="Cash"><option value="Cash at the slots"><option value="Chips at the table"><option value="Covered my drink"><option value="Venmo"></datalist></div>`,
+  {saveLabel:id?'Save':'Log loan',onSave:async()=>{
+    const amt=toCents(val('l_a'));if(!(amt>0))return 'Enter the amount, like 40.00.';
+    if(val('l_f')===val('l_t'))return 'Pick two different girls.';
+    const o={from:val('l_f'),to:val('l_t'),amountCents:amt,kind:'loan',note:val('l_n'),method:'Loan',date:val('l_d'),createdAt:p.createdAt||Date.now()};
+    const err=await write(()=>backend.save('payments',id||uid(),o));
+    if(!err)setTimeout(()=>toast(`${gname(o.to).split(' ')[0]} owes ${gname(o.from).split(' ')[0]} ${fmt(amt)}. It’s in Who owes who.`),50);
+    return err;
+  },onDelete:id?async()=>write(()=>backend.remove('payments',id)):null});
+}
 function payForm(id,pre={}){
   const p=id?S.payments.find(x=>x.id===id):{from:pre.from||sortedGirls()[0]?.id,to:pre.to||sortedGirls()[1]?.id,amountCents:pre.amt||0,date:todayIso(),method:'Venmo'};
   openModal(id?'Edit payment':'Record a payment',`
@@ -1262,9 +1280,10 @@ document.addEventListener('click',async ev=>{
     const err=await modalCtx.onDelete();if(err)merr(err);else{closeModal();toast('Deleted')}return}
   if(!t||t.tagName==='SELECT')return;
   if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
-  if(readOnly&&!['copy','filter','pay-new','pay-edit','zelle','applecash-tip','wrapped','slots-share','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
+  if(readOnly&&!['copy','filter','pay-new','pay-edit','loan-new','zelle','applecash-tip','wrapped','slots-share','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
   if(a==='applecash-tip'){setTimeout(()=>toast('In Messages, tap + then Apple Cash, enter the amount, and send. Then come back and tap Mark paid.'),300);return}
+  if(a==='loan-new'){loanForm();return}
   if(a==='wrapped'){showWrapped();return}
   if(a==='slots-share'){slotsShare(t.dataset.on==='1');return}
   if(a==='rsvp'){rsvp(id);return}
@@ -1295,7 +1314,7 @@ document.addEventListener('click',async ev=>{
   else if(a==='plan-new')planForm(null,t.dataset.date);
   else if(a==='plan-edit')planForm(id);
   else if(a==='pay-new')payForm(null,{from:t.dataset.from,to:t.dataset.to,amt:+t.dataset.amt||0});
-  else if(a==='pay-edit')payForm(id);
+  else if(a==='pay-edit'){const pp=S.payments.find(x=>x.id===id);pp&&pp.kind==='loan'?loanForm(id):payForm(id)}
   else if(a==='copy'){const txt=summaryText();try{await navigator.clipboard.writeText(txt);toast('Summary copied — paste it in the group chat')}catch(e){openModal('Settle-up summary',`<div class="f"><textarea id="sumtxt" style="min-height:220px">${esc(txt)}</textarea><span class="hint">Select all and copy.</span></div>`,{onSave:async()=>null,saveLabel:'Done'});setTimeout(()=>$('#sumtxt').select(),50)}}
 });
 document.addEventListener('click',ev=>{const b=ev.target.closest('[data-checkall]');if(!b)return;const pre=b.dataset.checkall;document.querySelectorAll(`input[type=checkbox][id^="${pre}"]`).forEach(cb=>{cb.checked=!!b.dataset.on})});
