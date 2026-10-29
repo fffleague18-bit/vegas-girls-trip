@@ -474,6 +474,7 @@ function vTrip(){
   <section class="sec"><div class="sec-head"><div><h2>The girls</h2><div class="sub">Everyone shows up here when they join.</div></div>${S.girls.length?'<button class="btn sm" data-act="girl-new">Add girl</button>':''}</div>${girls}</section>
   <section class="sec"><div class="sec-head"><div><h2>Hotels</h2><div class="sub">Hotel costs split only between the girls staying there.</div></div>${S.hotels.length?'<button class="btn primary sm" data-act="hotel-new">Add hotel</button>':''}</div>${hotels}</section>
   <section class="sec"><div class="sec-head"><h2>Trip details</h2><button class="btn sm" data-act="trip-edit">Edit</button></div>
+    ${t.startedBy?`<div class="sub">Trip started by ${esc(t.startedBy==='Owner'?'Pennie (owner)':t.startedBy)}</div>`:''}
     ${t.notes||t.emergency?'':`<div class="sub">Set the trip dates, emergency contacts and notes with Edit.</div>`}
     ${t.notes?`<div class="panel"><div class="eyebrow" style="color:var(--muted)">Notes</div><div style="white-space:pre-wrap">${esc(t.notes)}</div></div>`:''}
     ${t.emergency?`<div class="panel"><div class="eyebrow" style="color:var(--muted)">Emergency contacts</div><div style="white-space:pre-wrap">${esc(t.emergency)}</div></div>`:''}
@@ -930,7 +931,54 @@ function renderHome(msg){
       <section class="sec"><div class="sec-head"><div><h2>Archive</h2><div class="sub">Trips that have ended. Open one to look back or finish paybacks.</div></div></div>
         ${arc.length?`<div class="list">${arc.map(t=>`<div class="row" data-home="open" data-id="${esc(t.id)}"><div class="row-main"><span class="row-title">${esc(t.name||'Untitled trip')}</span><span class="small">${esc([t.destination,tripDates(t)].filter(Boolean).join(' · '))}</span></div><span class="row-amt"><span class="pill even">Ended</span><button type="button" class="linkbtn editlink" data-home="forget" data-id="${esc(t.id)}">Remove from phone</button></span></div>`).join('')}</div>`:`<div class="sub">Ended trips will be kept here.</div>`}
       </section>
+      ${OWNER?`<section class="sec"><div class="sec-head"><div><h2>Organizers</h2><div class="sub">Organizers can start new trips. Only you, the owner, can see this.</div></div><button class="btn primary sm" data-home="org-add">Add organizer</button></div>
+        ${ORGS===null?'<div class="sub">Loading…</div>':ORGS.length?`<div class="list">${ORGS.map(o=>`<div class="row" style="cursor:default"><div class="row-main"><span class="row-title">${esc(o.name)}</span><span class="small num">${esc(o.code)}</span></div><span class="row-amt"><span class="btnrow"><button type="button" class="btn sm" data-home="org-copy" data-id="${esc(o.code)}" data-name="${esc(o.name)}">Copy invite</button><button type="button" class="btn sm danger" data-home="org-remove" data-id="${esc(o.code)}" data-name="${esc(o.name)}">Remove</button></span></span></div>`).join('')}</div>`:'<div class="sub">No organizers yet. Right now only you can start trips.</div>'}
+        <div><button class="linkbtn" data-home="owner-off" style="font-size:12px">Turn off owner tools on this phone</button></div>
+      </section>`:`<div><button class="linkbtn" data-home="owner-on" style="font-size:12px;color:var(--muted)">Owner tools</button></div>`}
     </main>`;
+}
+let OWNER=lsGet('tripbook-owner')||'',ORGS=null;
+async function loadOrgs(){
+  if(!SB||!OWNER)return;
+  try{const {data,error}=await SB.rpc('org_list',{p_owner:OWNER});if(error)throw error;ORGS=data||[]}catch(e){ORGS=ORGS||[]}
+  if(ACTIVE===null&&$('#overlay').hidden)renderHome();
+}
+function makeOrgCode(name){const w=(String(name).toUpperCase().match(/[A-Z]+/)||['ORG'])[0].slice(0,6);const abc='ABCDEFGHJKMNPQRSTUVWXYZ';return w+'-'+(1000+Math.floor(Math.random()*9000))+abc[Math.floor(Math.random()*abc.length)]+abc[Math.floor(Math.random()*abc.length)]}
+function orgInvite(name,code){return `${name}, you’re now a trip organizer! You can start new trips in our Girls Trip app.
+
+1. Open ${location.origin}/ and add it to your home screen if you haven’t.
+2. On My Trips, tap “Start a new trip”.
+3. Organizer code: ${code}
+   (Keep this one private. It’s just for you.)
+4. After you create the trip, open it and tap “Copy invite” to send the trip passcode to the girls going.`}
+function ownerOnForm(){
+  openModal('Owner tools',`<p class="sub" style="margin:0">Enter your owner code to manage organizers on this phone.</p>
+    <div class="f"><label for="o_code">Owner code</label><input id="o_code" type="password" autocomplete="off"></div>`,
+  {saveLabel:'Turn on',onSave:async()=>{
+    const c=val('o_code');if(!c)return 'Enter your owner code.';
+    let ok=false;try{const {data,error}=await SB.rpc('org_is_owner',{p_owner:c});if(error)throw error;ok=data===true}catch(e){return tooMany(e)?LOCKED:'Couldn’t check the code. Try again.'}
+    if(!ok)return 'That isn’t the owner code.';
+    OWNER=c;lsSet('tripbook-owner',c);if(!lsGet('tripbook-org'))lsSet('tripbook-org',c);ORGS=null;setTimeout(()=>{renderHome();loadOrgs()},30);return null;
+  }});
+}
+function orgAddForm(){
+  openModal('Add an organizer',`
+    <div class="f"><label for="oa_name">Her name</label><input id="oa_name" placeholder="Jess"></div>
+    <div class="f"><label for="oa_code">Her organizer code</label><input id="oa_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.1em;text-transform:uppercase"><span class="hint">Made for you automatically. She uses it to start trips. Remove her anytime and the code stops working.</span></div>`,
+  {saveLabel:'Add organizer',onSave:async()=>{
+    const name=val('oa_name');if(!name)return 'Add her name.';
+    const code=val('oa_code').toUpperCase().replace(/\s+/g,'');if(code.length<8)return 'Make the code at least 8 characters.';
+    let r;try{const res=await SB.rpc('org_add',{p_owner:OWNER,p_name:name,p_code:code});if(res.error)throw res.error;r=res.data}catch(e){return tooMany(e)?LOCKED:'Couldn’t add her. Try again.'}
+    if(r==='not-owner'){OWNER='';lsSet('tripbook-owner','');return 'Your owner code changed. Turn owner tools on again.'}
+    if(r==='taken')return 'That code is already used. Change it a little.';
+    if(r!=='ok')return 'Couldn’t add her. Try again.';
+    setTimeout(()=>{loadOrgs();copyText(orgInvite(name,code),'Organizer invite for '+name,'Added! Her invite is copied. Paste it in a text to her.')},30);return null;
+  }});
+  {const n=$('#oa_name'),c=$('#oa_code');n.addEventListener('input',()=>{if(!c.dataset.touched)c.value=n.value.trim()?makeOrgCode(n.value):''});c.addEventListener('input',()=>c.dataset.touched='1')}
+}
+async function copyText(txt,title,okMsg){
+  try{await navigator.clipboard.writeText(txt);toast(okMsg)}
+  catch(e){openModal(title,`<div class="f"><textarea id="sharetxt" style="min-height:240px">${esc(txt)}</textarea><span class="hint">Select all and copy.</span></div>`,{onSave:async()=>null,saveLabel:'Done'});setTimeout(()=>$('#sharetxt').select(),50)}
 }
 async function refreshHome(){
   if(!SB)return;let changed=false;
@@ -962,7 +1010,7 @@ function newTripForm(){
     <div class="f"><label for="n_name">Trip name</label><input id="n_name" placeholder="Nashville Birthday Weekend"></div>
     <div class="f"><label for="n_dest">Where</label><input id="n_dest" placeholder="Nashville, Tennessee"></div>
     <div class="two"><div class="f"><label for="n_s">First day</label><input type="date" id="n_s"></div><div class="f"><label for="n_e">Last day</label><input type="date" id="n_e"></div></div>
-    <div class="f"><label for="n_org">Organizer code</label><input id="n_org" type="password" autocomplete="off" value="${esc(lsGet('tripbook-org'))}"><span class="hint">Only trip organizers can start a new trip. This phone remembers it after the first time.</span></div>
+    <div class="f"><label for="n_org">Organizer code</label><input id="n_org" type="password" autocomplete="off" value="${esc(lsGet('tripbook-org'))}"><span class="hint">Only the owner and organizers can start trips. Ask Pennie if you need one. This phone remembers it after the first time.</span></div>
     <div class="f"><label for="n_code">Passcode for this trip</label><input id="n_code" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:var(--num);letter-spacing:.12em;font-size:18px;text-transform:uppercase"><span class="hint">At least 8 characters with at least one number. Text it only to the girls on this trip. They’ll see this trip and nothing else.</span></div>`,
   {saveLabel:'Create trip',onSave:async()=>{
     const name=val('n_name');if(!name)return 'Give the trip a name.';
@@ -986,6 +1034,12 @@ document.addEventListener('click',ev=>{
   const b=ev.target.closest('[data-home]');if(!b||!SB)return;
   const a=b.dataset.home,id=b.dataset.id;
   if(a==='forget'){ev.stopPropagation();if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Tap again to remove';return}forgetTrip(id);renderHome();toast('Removed from this phone');return}
+  if(a==='owner-on'){ownerOnForm();return}
+  if(a==='owner-off'){OWNER='';ORGS=null;lsSet('tripbook-owner','');renderHome();toast('Owner tools turned off on this phone');return}
+  if(a==='org-add'){orgAddForm();return}
+  if(a==='org-copy'){copyText(orgInvite(b.dataset.name,id),'Organizer invite for '+b.dataset.name,'Invite copied. Paste it in a text to '+b.dataset.name+'.');return}
+  if(a==='org-remove'){if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Tap again';return}
+    SB.rpc('org_remove',{p_owner:OWNER,p_code:id}).then(()=>{toast(b.dataset.name+' is no longer an organizer');loadOrgs()});return}
   if(a==='open'){const t=myTrips().find(x=>x.id===id);if(t&&t.needsCode){joinForm('The passcode for '+(t.name||'this trip')+' changed. Enter the new one.');return}openTrip(id)}
   else if(a==='new')newTripForm();
   else if(a==='join')joinForm();
@@ -1005,7 +1059,7 @@ document.addEventListener('click',ev=>{
     upsertTrip({id:tr.id,needsCode:true});lsSet(ACTIVE_KEY,'');
     renderHome('The passcode for '+(tr.name||'your trip')+' changed. Tap it to enter the new one.');refreshHome();return;
   }
-  renderHome();refreshHome();
+  renderHome();refreshHome();loadOrgs();
 })();
 })();
 </script>
