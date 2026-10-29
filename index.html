@@ -140,6 +140,9 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .pill.pos{background:var(--pos-soft)}.pill.neg{background:var(--neg-soft)}.pill.even{background:var(--sunk);color:var(--muted)}
 .xfer{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
 .xfer:first-child{border-top:0}
+.xfer-pay{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.paybtns{display:flex;flex-wrap:wrap;gap:6px}
+.paybtn{text-decoration:none;color:var(--ink)}
 .xfer-who{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .arrow{color:var(--muted);font-size:13px}
 .xfer-amt{font-family:var(--num);font-weight:600;font-size:17px}
@@ -206,6 +209,9 @@ td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
 .treatchip{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
 .nights{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
 .nights input{width:52px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:4px 6px;font-size:14px}
+.budgetbar{display:block;height:6px;border-radius:4px;background:var(--sunk);overflow:hidden;margin-top:4px;max-width:260px}
+.budgetbar span{display:block;height:100%;border-radius:4px}
+.depositme{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--accent-soft);border-color:transparent}
 .archived{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
 .sharepanel{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .sharepanel .code{font-size:26px;font-weight:600;letter-spacing:.12em;margin:2px 0 4px;overflow-wrap:anywhere}
@@ -322,6 +328,26 @@ function splitWeighted(amount,ids,w){
   let used=0;const raw=ids.map(id=>{const v=Math.floor(amount*w(id)/tw);used+=v;return [id,v]});
   let rem=amount-used;raw.forEach(([id,v])=>{out[id]=v+(rem>0&&w(id)>0?1:0);if(rem>0&&w(id)>0)rem--});
   return out;
+}
+/* Payment apps: each girl can list Venmo, Cash App, PayPal and Zelle. Older single field "payHandle" still works. */
+function payApps(g){
+  if(!g)return {};const a={venmo:g.venmo||'',cashapp:g.cashapp||'',paypal:g.paypal||'',zelle:g.zelle||''};
+  const h=(g.payHandle||'').trim();
+  if(h&&!a.venmo&&!a.cashapp&&!a.paypal&&!a.zelle){if(/^\$/.test(h))a.cashapp=h;else if(/paypal/i.test(h))a.paypal=h;else if(/zelle|\d{3}.*\d{4}|@.+\./i.test(h)&&!/^@/.test(h))a.zelle=h.replace(/zelle:?/i,'').trim();else a.venmo=h}
+  return a;
+}
+const clean=(v,re)=>String(v||'').trim().replace(re,'');
+function payLinks(toId,amt,note){
+  const a=payApps(girl(toId));const d=(amt/100).toFixed(2);const out=[];
+  if(a.venmo){const u=clean(a.venmo,/^@|^https?:\/\/(www\.)?venmo\.com\/(u\/)?/i);out.push({app:'Venmo',href:`https://venmo.com/${encodeURIComponent(u)}?txn=pay&amount=${d}&note=${encodeURIComponent(note)}`})}
+  if(a.cashapp){const u=clean(a.cashapp,/^\$|^https?:\/\/cash\.app\/\$?/i);out.push({app:'Cash App',href:`https://cash.app/$${encodeURIComponent(u)}/${d}`})}
+  if(a.paypal){const u=clean(a.paypal,/^https?:\/\/(www\.)?paypal\.me\/|^paypal\.me\/|^@/i);out.push({app:'PayPal',href:`https://paypal.me/${encodeURIComponent(u)}/${d}`})}
+  if(a.zelle)out.push({app:'Zelle',zelle:a.zelle});
+  return out;
+}
+function payButtons(from,to,amt,note){
+  const ls=payLinks(to,amt,note);if(!ls.length)return '';
+  return `<div class="paybtns">${ls.map(l=>l.href?`<a class="btn sm paybtn" href="${esc(l.href)}" target="_blank" rel="noopener">Pay ${esc(fmt(amt))} with ${esc(l.app)}</a>`:`<button type="button" class="btn sm paybtn" data-act="zelle" data-to="${to}" data-amt="${amt}">Zelle ${esc(l.zelle)}</button>`).join('')}</div>`;
 }
 const TREAT_LABELS=['Bride','Birthday girl','Bachelorette','Bride-to-be','Mom-to-be','Graduate','Guest of honor','Newly single','Retiree','Promotion queen'];
 const treats=()=>(S.trip.treats||[]).filter(t=>girl(t.girl));
@@ -628,7 +654,7 @@ function vTrip(){
   const girls=S.girls.length?`<div class="girls">${sortedGirls().map(g=>{
     const hs=S.hotels.filter(h=>(h.guests||[]).includes(g.id)).map(h=>h.name);
     return `<button class="girl" data-act="girl-edit" data-id="${g.id}">
-      <div class="girl-top">${av(g.id)}<div><div class="girl-name">${esc(g.name)}${g.id===me?' <span class="chip">You</span>':''}${treatOf(g.id)?` <span class="chip treatchip">🎉 ${esc(treatOf(g.id).label)}</span>`:''}</div><div class="small">${esc([g.phone,g.payHandle].filter(Boolean).join(' · ')||'Tap to add phone & Venmo')}</div></div></div>
+      <div class="girl-top">${av(g.id)}<div><div class="girl-name">${esc(g.name)}${g.id===me?' <span class="chip">You</span>':''}${treatOf(g.id)?` <span class="chip treatchip">🎉 ${esc(treatOf(g.id).label)}</span>`:''}</div><div class="small">${esc((()=>{const a=payApps(g);return [g.phone,a.venmo&&'Venmo '+a.venmo,a.cashapp&&'Cash App '+a.cashapp,a.paypal&&'PayPal',a.zelle&&'Zelle'].filter(Boolean).join(' · ')})()||'Tap to add phone & Venmo')}</div></div></div>
       ${hs.length?`<div class="small">Staying at ${esc(hs.join(', '))}</div>`:''}
       ${(g.cards||'').trim()?`<div class="chips">${g.cards.split(',').map(c=>c.trim()).filter(Boolean).map(c=>`<span class="chip">${esc(c)}</span>`).join('')}</div>`:''}
       <div class="small">Paid so far <span class="num">${fmt(b[g.id]?.paid)}</span></div>
@@ -640,6 +666,7 @@ function vTrip(){
       <div class="sharebtns"><button class="btn primary sm" data-act="copy-invite">Copy invite</button><button class="btn sm" data-act="copy-code">Copy passcode</button></div>
     </div></section>`:'';
   return `${share}
+  ${vBudget()}
   <section class="sec"><div class="sec-head"><div><h2>The girls</h2><div class="sub">Everyone shows up here when they join.</div></div>${S.girls.length?'<button class="btn sm" data-act="girl-new">Add girl</button>':''}</div>${girls}</section>
   ${S.girls.length?`<section class="sec"><div class="sec-head"><div><h2>Treating someone</h2><div class="sub">Her share is split among everyone else.</div></div><button class="btn sm" data-act="treat-new">🎉 Treat someone</button></div>
     ${treats().length?`<div class="list">${treats().map(t=>`<div class="row" data-act="treat-edit" data-id="${t.girl}"><div class="row-main"><span class="row-title">🎉 Treat the ${esc(t.label.toLowerCase())}: ${esc(gname(t.girl))}</span><span class="small">${t.scope==='pick'?'Only on expenses you pick':'On every shared expense she’s in'} · she pays <span class="num">${fmt(S.expenses.reduce((x,e)=>x+(shares(e)[t.girl]||0),0))}</span></span></div><span class="row-amt"><span class="editlink">Edit</span></span></div>`).join('')}</div>`:`<div class="sub">Bride, birthday girl, mom-to-be? Treat her and the app splits her part among the rest of you.</div>`}
@@ -752,8 +779,9 @@ function vSettle(){
   return `<section class="sec">
     <div class="sec-head"><div><h2>Who owes who</h2><div class="sub">The fewest payments that make everyone even.</div></div><button class="btn sm" data-act="copy">Copy summary</button></div>
     ${!S.expenses.length?`<div class="empty"><b>Nothing to settle yet</b><span>Once expenses are logged, this shows exactly who sends money to whom.</span></div>`:
-    xs.length?`<div class="list">${xs.map(x=>{const to=girl(x.to);return `<div class="xfer"><div class="xfer-who">${av(x.from,'xs')}<b>${esc(gname(x.from))}</b><span class="arrow">pays</span>${av(x.to,'xs')}<b>${esc(gname(x.to))}</b>${to?.payHandle?`<span class="small">${esc(to.payHandle)}</span>`:''}</div>
-      <div style="display:flex;align-items:center;gap:10px"><span class="xfer-amt num">${fmt(x.amt)}</span><button class="btn sm" data-act="pay-new" data-from="${x.from}" data-to="${x.to}" data-amt="${x.amt}">Mark paid</button></div></div>`}).join('')}</div>`:
+    xs.length?`<div class="list">${xs.map(x=>{const to=girl(x.to);return `<div class="xfer"><div class="xfer-who">${av(x.from,'xs')}<b>${esc(gname(x.from))}</b><span class="arrow">pays</span>${av(x.to,'xs')}<b>${esc(gname(x.to))}</b></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="xfer-amt num">${fmt(x.amt)}</span><button class="btn sm" data-act="pay-new" data-from="${x.from}" data-to="${x.to}" data-amt="${x.amt}">Mark paid</button></div>
+      ${payButtons(x.from,x.to,x.amt,'Splitzy · '+(S.trip.name||'trip'))?`<div class="xfer-pay">${payButtons(x.from,x.to,x.amt,'Splitzy · '+(S.trip.name||'trip'))}<span class="small">After paying, tap Mark paid.</span></div>`:''}</div>`}).join('')}</div>`:
     `<div class="allset">Everyone is square. Nobody owes anybody.</div>`}
   </section>
   <section class="sec"><div class="sec-head"><h2>Balances</h2></div>
@@ -761,7 +789,7 @@ function vSettle(){
     <div class="sub">Tap a name to see her full trip breakdown. Paid = what she put on her cards for the group. Her share = what she used. Settled = money she’s already sent back (minus what she’s received).</div>
   </section>
   <section class="sec"><div class="sec-head"><h2>Payments made</h2><button class="btn sm" data-act="pay-new">Record payment</button></div>
-    ${S.payments.length?`<div class="list">${[...S.payments].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(p=>`<div class="row" data-act="pay-edit" data-id="${p.id}"><div class="row-main"><span class="row-title">${esc(gname(p.from))} paid ${esc(gname(p.to))}</span><span class="small">${esc([p.method,p.date&&dLong(p.date)].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(p.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div>`:'<div class="sub">When someone pays another girl back, tap Mark paid so balances stay right.</div>'}
+    ${S.payments.length?`<div class="list">${[...S.payments].sort((a,c)=>(c.createdAt||0)-(a.createdAt||0)).map(p=>`<div class="row" data-act="pay-edit" data-id="${p.id}"><div class="row-main"><span class="row-title">${esc(gname(p.from))} paid ${esc(gname(p.to))}${p.kind==='deposit'?' (deposit)':''}</span><span class="small">${esc([p.method,p.date&&dLong(p.date)].filter(Boolean).join(' · '))}</span></div><span class="row-amt">${fmt(p.amountCents)}<span class="editlink">Edit</span></span></div>`).join('')}</div>`:'<div class="sub">When someone pays another girl back, tap Mark paid so balances stay right.</div>'}
   </section>
   ${cardRows.length?`<section class="sec"><div class="sec-head"><h2>By credit card</h2></div><div class="list">${cardRows.map(([k,v])=>{const[c,id]=k.split('|');return `<div class="row" style="cursor:default"><div class="row-main"><span class="row-title">${esc(c)}</span><span class="small">${esc(gname(id))}</span></div><span class="row-amt">${fmt(v)}</span></div>`}).join('')}</div></section>`:''}
   ${cats.length?`<section class="sec"><div class="sec-head"><h2>Where the money went</h2></div><div class="panel bars">${cats.map(([c,v])=>`<div class="bar"><span>${esc(c)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(2,v/max*100)}%;background:${catColor(c)}"></div></div><span class="num">${fmt(v)}</span></div>`).join('')}</div></section>`:''}`;
@@ -883,6 +911,43 @@ function treatForm(gid){
   },onDelete:cur?async()=>write(()=>backend.save('trip','main',{...S.trip,treats:(S.trip.treats||[]).filter(t=>t.girl!==cur.girl)})):null});
   $('#tr_l').addEventListener('change',()=>{const o=$('#tr_o');o.hidden=val('tr_l')!=='__other';if(!o.hidden)o.focus()});
 }
+function budgetForm(){
+  const bd=S.trip.budget||{};const me=meId();
+  openModal('Budget & deposits',`
+    <div class="two"><div class="f"><label for="bd_pp">Estimated cost per person</label><input id="bd_pp" inputmode="decimal" value="${bd.perPerson?(bd.perPerson/100).toFixed(2):''}" placeholder="800.00"><span class="hint">Hotel, shows, food: your best guess.</span></div>
+      <div class="f"><label for="bd_dep">Deposit per person</label><input id="bd_dep" inputmode="decimal" value="${bd.deposit?(bd.deposit/100).toFixed(2):''}" placeholder="200.00"><span class="hint">Leave blank for no deposit.</span></div></div>
+    <div class="two"><div class="f"><label for="bd_to">Send deposits to</label><select id="bd_to">${girlOpts(bd.to||me||'')}</select></div><div class="f"><label for="bd_due">Due by</label><input type="date" id="bd_due" value="${esc(bd.due)}"></div></div>
+    <span class="hint">Deposits count as money already paid toward the trip, so they come off what each girl owes at the end.</span>`,
+  {onSave:async()=>{
+    const pp=val('bd_pp')?toCents(val('bd_pp')):0,dep=val('bd_dep')?toCents(val('bd_dep')):0;
+    if(isNaN(pp)||isNaN(dep))return 'Enter amounts like 800.00.';
+    return write(()=>backend.save('trip','main',{...S.trip,budget:{perPerson:pp||0,deposit:dep||0,to:val('bd_to'),due:val('bd_due')}}));
+  },onDelete:S.trip.budget?async()=>write(()=>backend.save('trip','main',{...S.trip,budget:null})):null});
+}
+function depositsPaid(gid){const bd=S.trip.budget||{};return S.payments.filter(p=>p.kind==='deposit'&&p.from===gid&&p.to===bd.to).reduce((t,p)=>t+(p.amountCents||0),0)}
+function vBudget(){
+  if(!S.girls.length)return '';
+  const bd=S.trip.budget;
+  if(!bd||(!bd.perPerson&&!bd.deposit))return `<section class="sec"><div class="sec-head"><div><h2>Budget & deposits</h2><div class="sub">Set an estimated cost per person and collect deposits before the trip.</div></div><button class="btn sm" data-act="budget-edit">Set budget</button></div></section>`;
+  const b=balances();
+  const rows=sortedGirls().map(g=>{
+    const paid=depositsPaid(g.id),need=bd.deposit||0,isTo=g.id===bd.to;
+    const share=b[g.id]?.share||0;const pct=bd.perPerson?Math.min(100,Math.round(share/bd.perPerson*100)):0;
+    return `<div class="row" style="cursor:default"><div class="row-main"><span class="row-title">${esc(g.name)}</span>
+      ${bd.perPerson?`<span class="small">Spent so far <span class="num">${fmt(share)}</span> of <span class="num">${fmt(bd.perPerson)}</span></span><span class="budgetbar"><span style="width:${pct}%;background:${share>bd.perPerson?'var(--neg)':'var(--accent)'}"></span></span>`:''}</div>
+      <span class="row-amt">${need?(isTo?'<span class="pill even">Collecting</span>':paid>=need?`<span class="pill pos">Deposit paid ✓</span>`:`<span class="btnrow"><button class="btn sm" data-act="deposit-paid" data-id="${g.id}">Mark deposit paid</button></span>${paid?`<small>${fmt(paid)} of ${fmt(need)}</small>`:''}`):''}</span></div>`}).join('');
+  const me=meId();const myOwe=me&&bd.deposit&&me!==bd.to?Math.max(0,bd.deposit-depositsPaid(me)):0;
+  const paidCount=sortedGirls().filter(g=>g.id!==bd.to&&depositsPaid(g.id)>=(bd.deposit||0)).length,total=sortedGirls().filter(g=>g.id!==bd.to).length;
+  return `<section class="sec"><div class="sec-head"><div><h2>Budget & deposits</h2><div class="sub">${[bd.perPerson&&`About ${fmt(bd.perPerson)} per person`,bd.deposit&&`${fmt(bd.deposit)} deposit to ${gname(bd.to).split(' ')[0]}${bd.due?' by '+dShort(bd.due):''}`,bd.deposit&&`${paidCount} of ${total} paid`].filter(Boolean).map(esc).join(' · ')}</div></div><button class="btn sm" data-act="budget-edit">Edit</button></div>
+    ${myOwe?`<div class="panel depositme"><b>Your deposit: ${fmt(myOwe)}</b>${payButtons(me,bd.to,myOwe,'Splitzy deposit · '+(S.trip.name||'trip'))}<button class="btn sm" data-act="deposit-paid" data-id="${me}">I paid it</button></div>`:''}
+    <div class="list">${rows}</div></section>`;
+}
+async function markDeposit(gid){
+  const bd=S.trip.budget||{};const amt=Math.max(0,(bd.deposit||0)-depositsPaid(gid));if(!amt||!bd.to)return;
+  const err=await write(()=>backend.save('payments',uid(),{from:gid,to:bd.to,amountCents:amt,method:'Deposit',kind:'deposit',date:todayIso(),createdAt:Date.now()}));
+  toast(err||gname(gid).split(' ')[0]+'’s deposit marked paid');
+}
+async function zelleCopy(to,amt){const a=payApps(girl(to));copyText(a.zelle,'Zelle '+gname(to),'Copied '+a.zelle+'. Open your bank app and send '+fmt(+amt)+' with Zelle.')}
 function endTripForm(){
   const owed=transfers(balances());
   openModal('End this trip?',`
@@ -900,13 +965,16 @@ function girlForm(id){
   const used=id&&(S.expenses.some(e=>e.paidBy===id||shares(e)[id])||S.payments.some(p=>p.from===id||p.to===id));
   openModal(id?'Edit '+(g.name||''):'Add a girl',`
     <div class="f"><label for="g_n">Name</label><input id="g_n" value="${esc(g.name)}" autocomplete="off"></div>
-    <div class="two"><div class="f"><label for="g_p">Phone</label><input id="g_p" inputmode="tel" value="${esc(g.phone)}"></div><div class="f"><label for="g_v">Venmo / Zelle / Cash App</label><input id="g_v" value="${esc(g.payHandle)}" placeholder="@venmo-name"></div></div>
+    <div class="f"><label for="g_p">Phone</label><input id="g_p" inputmode="tel" value="${esc(g.phone)}"></div>
+    ${(()=>{const PA=payApps(g);return `<div class="two"><div class="f"><label for="g_venmo">Venmo</label><input id="g_venmo" value="${esc(PA.venmo)}" placeholder="@username" autocapitalize="off"></div><div class="f"><label for="g_cashapp">Cash App</label><input id="g_cashapp" value="${esc(PA.cashapp)}" placeholder="$cashtag" autocapitalize="off"></div></div>
+    <div class="two"><div class="f"><label for="g_paypal">PayPal</label><input id="g_paypal" value="${esc(PA.paypal)}" placeholder="paypal.me name" autocapitalize="off"></div><div class="f"><label for="g_zelle">Zelle</label><input id="g_zelle" value="${esc(PA.zelle)}" placeholder="Phone or email" autocapitalize="off"></div></div>
+    <span class="hint">Fill in any you use. The girls get one-tap buttons to pay you back.</span>`})()}
     <div class="f"><label for="g_c">Cards she might use</label><input id="g_c" value="${esc(g.cards)}" maxlength="120" placeholder="Amex 1005, Chase 4417"><span class="hint">Card name and the <b>last 4 digits only</b>. Separate cards with commas.</span></div>
     ${g.email?`<div class="hint">Signs in as ${esc(g.email)}</div>`:id?'':`<div class="hint">Girls who sign in add themselves. Use this only for someone who won’t be using the app.</div>`}`,
   {onSave:async()=>{
     const name=val('g_n');if(!name)return 'Add her name.';
     {const ce=cardErr(val('g_c'));if(ce)return ce;}
-    const o={name,phone:val('g_p'),payHandle:val('g_v'),cards:val('g_c'),email:g.email||'',createdAt:g.createdAt||Date.now()};
+    const o={...g,name,phone:val('g_p'),venmo:val('g_venmo'),cashapp:val('g_cashapp'),paypal:val('g_paypal'),zelle:val('g_zelle'),payHandle:'',cards:val('g_c'),email:g.email||'',createdAt:g.createdAt||Date.now()};delete o.id;
     return write(()=>backend.save('girls',id||uid(),o));
   },onDelete:id?async()=>used?`${g.name} has expenses or payments. Remove those first so the math stays right.`:write(()=>backend.remove('girls',id)):null});
 }
@@ -920,19 +988,22 @@ function ensureMe(force){
     <p class="sub" style="margin:0">Pick your name so the app knows who’s adding expenses on this phone.</p>
     ${gs.length?`<div class="f"><label for="w_who">I’m…</label><select id="w_who"><option value="">New here, add me</option>${gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></div>`:''}
     <div class="f"><label for="w_n">Your name</label><input id="w_n" autocomplete="given-name"></div>
-    <div class="two"><div class="f"><label for="w_p">Phone</label><input id="w_p" inputmode="tel"></div><div class="f"><label for="w_v">Venmo / Zelle / Cash App</label><input id="w_v" placeholder="@venmo-name"></div></div>
+    <div class="f"><label for="w_p">Phone</label><input id="w_p" inputmode="tel"></div>
+    ${(()=>{const PA={};return `<div class="two"><div class="f"><label for="w_venmo">Venmo</label><input id="w_venmo" value="${esc(PA.venmo)}" placeholder="@username" autocapitalize="off"></div><div class="f"><label for="w_cashapp">Cash App</label><input id="w_cashapp" value="${esc(PA.cashapp)}" placeholder="$cashtag" autocapitalize="off"></div></div>
+    <div class="two"><div class="f"><label for="w_paypal">PayPal</label><input id="w_paypal" value="${esc(PA.paypal)}" placeholder="paypal.me name" autocapitalize="off"></div><div class="f"><label for="w_zelle">Zelle</label><input id="w_zelle" value="${esc(PA.zelle)}" placeholder="Phone or email" autocapitalize="off"></div></div>
+    <span class="hint">Fill in any you use. The girls get one-tap buttons to pay you back.</span>`})()}
     <div class="f"><label for="w_c">Cards you might use</label><input id="w_c" maxlength="120" placeholder="Amex 1005, Chase 4417"><span class="hint">Card name and the <b>last 4 digits only</b>. Never the full number.</span></div>`,
   {saveLabel:'That’s me',onSave:async()=>{
     const name=val('w_n');if(!name)return 'Add your name.';
     {const ce=cardErr(val('w_c'));if(ce)return ce;}
     const claim=val('w_who');const ex=claim?girl(claim)||{}:{};const id=claim||uid();
-    const o={...ex,name,phone:val('w_p'),payHandle:val('w_v'),cards:val('w_c'),createdAt:ex.createdAt||Date.now()};delete o.id;
+    const o={...ex,name,phone:val('w_p'),venmo:val('w_venmo'),cashapp:val('w_cashapp'),paypal:val('w_paypal'),zelle:val('w_zelle'),payHandle:'',cards:val('w_c'),createdAt:ex.createdAt||Date.now()};delete o.id;
     const err=await write(()=>backend.save('girls',id,o));
     if(!err){lsSet(meKey(),id);render();setTimeout(()=>toast('Hi '+name+'! You’re on the trip.'),50)}
     return err;
   }});
   const w=document.getElementById('w_who');
-  const fill=()=>{const g=girl(w?w.value:'')||{};['n:name','p:phone','v:payHandle','c:cards'].forEach(k=>{const[f,p]=k.split(':');document.getElementById('w_'+f).value=g[p]||''})};
+  const fill=()=>{const g=girl(w?w.value:'')||{};const pa=payApps(g);['n:name','p:phone','c:cards'].forEach(k=>{const[f,p]=k.split(':');document.getElementById('w_'+f).value=g[p]||''});['venmo','cashapp','paypal','zelle'].forEach(k=>{document.getElementById('w_'+k).value=pa[k]||''})};
   if(w)w.addEventListener('change',fill);
 }
 
@@ -1065,7 +1136,7 @@ function payForm(id,pre={}){
 function summaryText(){
   const b=balances();const xs=transfers(b);const total=S.expenses.reduce((s,e)=>s+e.amountCents,0);
   const lines=[`${S.trip.name||'Vegas Girls Trip'} — settle up`,`Total spent: ${fmt(total)}`,''];
-  if(xs.length){lines.push('Payments to make:');xs.forEach(x=>{const h=girl(x.to)?.payHandle;lines.push(`• ${gname(x.from)} pays ${gname(x.to)} ${fmt(x.amt)}${h?' ('+h+')':''}`)})}else lines.push('Everyone is even!');
+  if(xs.length){lines.push('Payments to make:');xs.forEach(x=>{const pa=payApps(girl(x.to));const h=[pa.venmo&&'Venmo '+pa.venmo,pa.cashapp&&'Cash App '+pa.cashapp,pa.zelle&&'Zelle '+pa.zelle].filter(Boolean).join(', ');lines.push(`• ${gname(x.from)} pays ${gname(x.to)} ${fmt(x.amt)}${h?' ('+h+')':''}`)})}else lines.push('Everyone is even!');
   lines.push('','Each girl’s share:');sortedGirls().forEach(g=>lines.push(`• ${g.name}: spent ${fmt(b[g.id].share)}, paid ${fmt(b[g.id].paid)}`));
   return lines.join('\n');
 }
@@ -1079,8 +1150,11 @@ document.addEventListener('click',async ev=>{
     const err=await modalCtx.onDelete();if(err)merr(err);else{closeModal();toast('Deleted')}return}
   if(!t||t.tagName==='SELECT')return;
   if(['copy-invite','copy-code'].includes(t.dataset.act)){copyShare(t.dataset.act==='copy-invite');return}
-  if(readOnly&&!['copy','filter','pay-new','pay-edit','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
+  if(readOnly&&!['copy','filter','pay-new','pay-edit','zelle','trip-reopen','girl-breakdown','mine-new','mine-in','mine-edit','mine-copykey','mine-usekey'].includes(t.dataset.act)){toast('This trip is archived. Tap Reopen trip to make changes.');return}
   const a=t.dataset.act,id=t.dataset.id;
+  if(a==='budget-edit'){budgetForm();return}
+  if(a==='deposit-paid'){markDeposit(id);return}
+  if(a==='zelle'){zelleCopy(t.dataset.to,t.dataset.amt);return}
   if(a==='treat-new'){treatForm();return}
   if(a==='treat-edit'){treatForm(id);return}
   if(a==='mine-new'){mineForm();wireMineType()}
