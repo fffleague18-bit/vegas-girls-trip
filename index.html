@@ -307,6 +307,10 @@ const dShort=s=>{const d=pd(s);return d?d.toLocaleDateString('en-US',{month:'sho
 const t12=t=>{if(!t)return'';const[h,m]=t.split(':').map(Number);return ((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?' am':' pm')};
 const girl=id=>S.girls.find(g=>g.id===id);
 const gname=id=>girl(id)?.name||'Someone';
+/* First name only; adds a last initial when two girls share a first name. */
+const shortName=id=>{const n=(gname(id)||'').trim().split(/\s+/);const f=n[0]||'Someone';
+  const dup=S.girls.some(g=>g.id!==id&&(g.name||'').trim().split(/\s+/)[0].toLowerCase()===f.toLowerCase());
+  return dup&&n.length>1?f+' '+n[n.length-1][0]+'.':f};
 const sortedGirls=()=>[...S.girls].sort((a,b)=>(a.name||'').localeCompare(b.name||'',undefined,{sensitivity:'base'})||(a.createdAt||0)-(b.createdAt||0));
 /* Avatar colors follow join order so a girl keeps her color when others are added. */
 const gidx=id=>Math.max(0,[...S.girls].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)).findIndex(g=>g.id===id));
@@ -706,7 +710,7 @@ function vPlans(){
       <span class="time">${p.time?t12(p.time):'Any time'}</span>
       <div class="row-main"><span class="row-title">${esc(p.title)}</span>
         <span class="small">${esc([p.location,p.confirmation&&'Conf # '+p.confirmation,p.cost&&p.cost+' per person'].filter(Boolean).join(' · '))}</span>
-        ${(p.going||[]).filter(girl).length?`<span class="small"><b>Going:</b> ${esc((p.going||[]).filter(girl).map(gname).sort((a,b)=>a.localeCompare(b)).join(', '))}</span>`:'<span class="small">Nobody marked as going yet</span>'}
+        ${(p.going||[]).filter(girl).length?`<span class="small"><b>Going:</b> ${esc((p.going||[]).filter(girl).map(shortName).sort((a,b)=>a.localeCompare(b)).join(', '))}</span>`:'<span class="small">Nobody marked as going yet</span>'}
         ${p.notes?`<span class="small">${esc(p.notes)}</span>`:''}</div>
       <div style="display:grid;gap:6px;justify-items:end"><span class="chip">${esc(p.kind||'Plan')}</span>${(p.going||[]).filter(girl).length?`<span class="stack">${(p.going||[]).filter(girl).map(id=>av(id,'xs')).join('')}</span>`:''}
         <div class="btnrow">${meId()?((p.going||[]).includes(meId())?`<button class="btn sm imin on" data-act="rsvp" data-id="${p.id}" aria-pressed="true">✓ I’m in</button>`:`<button class="btn sm imin" data-act="rsvp" data-id="${p.id}" aria-pressed="false">I’m in?</button>`):''}<button class="btn sm" data-act="plan-edit" data-id="${p.id}">Edit</button><button class="btn sm" data-act="plan-charge" data-id="${p.id}">Add cost</button></div></div>
